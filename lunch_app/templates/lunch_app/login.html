@@ -1,0 +1,11 @@
+{% extends 'lunch_app/base.html' %}
+{% block content %}
+<div class="card" style="max-width: 400px; margin: auto;">
+    <h2>Login</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn">Einloggen</button>
+    </form>
+</div>
+{% endblock %}

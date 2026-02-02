@@ -1,0 +1,25 @@
+# Python-Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django-Datenbank (WICHTIG: Die lokale DB soll nicht auf GitHub)
+db.sqlite3
+db.sqlite3-journal
+
+# Lokale Einstellungen & Geheimnisse
+.env
+local_settings.py
+
+# Statische Dateien (werden auf dem Server generiert)
+/static/
+
+# Virtuelle Umgebungen
+venv/
+env/
+myenv/
+.venv/
+
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db

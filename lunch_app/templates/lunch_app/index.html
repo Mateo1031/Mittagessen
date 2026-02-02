@@ -1,0 +1,22 @@
+{% extends 'lunch_app/base.html' %}
+
+{% block content %}
+<h2>Wo bestellen wir heute?</h2>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">
+    
+    {% for res in restaurants %}
+        <div class="card">
+            <h3>{{ res.name }}</h3>
+            <p>{{ res.beschreibung }}</p>
+            <a href="{% url 'menu' res.id %}" class="btn">Zum Menü</a>
+        </div>
+    {% empty %}
+        <div class="card">
+            <p>Noch keine Restaurants vorhanden.</p>
+            <p>Bitte logge dich im <a href="/admin">Admin-Bereich</a> ein und erstelle welche.</p>
+        </div>
+    {% endfor %}
+
+</div>
+{% endblock %}

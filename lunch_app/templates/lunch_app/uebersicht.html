@@ -1,0 +1,47 @@
+{% extends 'lunch_app/base.html' %}
+
+{% block content %}
+<h2>📋 Bestellübersicht (Heute)</h2>
+
+<div class="card">
+    {% if user_daten %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Benutzer</th>
+                    <th>Bestellte Gerichte</th>
+                    <th>Summe pro Person</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, daten in user_daten.items %}
+                <tr>
+                    <td style="vertical-align: top; font-weight: bold;">{{ user.username }}</td>
+                    <td>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            {% for item in daten.items %}
+                                <li>
+                                    {{ item.gericht.name }} 
+                                    <small style="color: #666;">({{ item.gericht.restaurant.name }})</small>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                    <td style="vertical-align: top; font-weight: bold;">
+                        {{ daten.summe }} CHF
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background: #333; color: #fff; font-weight: bold;">
+                    <td colspan="2" style="text-align: right;">GESAMT TOTAL:</td>
+                    <td>{{ gesamt_total }} CHF</td>
+                </tr>
+            </tfoot>
+        </table>
+    {% else %}
+        <p style="padding: 20px; text-align: center;">Heute gibt es noch keine Bestellungen.</p>
+    {% endif %}
+</div>
+{% endblock %}

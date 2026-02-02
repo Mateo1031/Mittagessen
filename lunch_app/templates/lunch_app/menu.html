@@ -1,0 +1,54 @@
+{% extends 'lunch_app/base.html' %}
+
+{% block content %}
+<h2>Menü: {{ restaurant.name }}</h2>
+<div style="margin-bottom: 20px;">
+  <a href="{% url 'home' %}" 
+     style="display: inline-block; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 6px; font-family: sans-serif; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+     ← Zurück zur Auswahl
+  </a>
+</div>
+
+{% if ist_zu_spaet %}
+    <div class="alert" style="background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
+        <strong>Bestellschluss vorbei!</strong><br>
+        Es ist nach 11:00 Uhr. Bestellungen sind für heute nicht mehr möglich.
+    </div>
+{% else %}
+    <form action="{% url 'bestellen_abschliessen' %}" method="post">
+        {% csrf_token %}
+        
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Auswahl</th>
+                        <th>Gericht</th>
+                        <th>Preis</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gericht in restaurant.gerichte.all %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="gerichte" value="{{ gericht.id }}" id="gericht_{{ gericht.id }}" style="transform: scale(1.5);">
+                        </td>
+                        <td>
+                            <label for="gericht_{{ gericht.id }}" style="cursor: pointer; display: block;">
+                                {{ gericht.name }}
+                            </label>
+                        </td>
+                        <td>{{ gericht.preis }} CHF</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px; text-align: right;">
+            <button type="submit" class="btn" style="font-size: 1.2rem;">Bestellen</button>
+        </div>
+    </form>
+{% endif %}
+
+{% endblock %}
