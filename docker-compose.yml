@@ -8,8 +8,8 @@ services:
     environment:
       - TZ=Europe/Zurich
       - ADMIN_EMAIL=m.ruiz@adeon.ch
-    expose:
-      - "8000"
+    ports: # <-- HIER GEÄNDERT
+      - "127.0.0.1:8001:8000" # <-- HIER GEÄNDERT (Hinterzimmer)
     env_file:
       - .env
     volumes:
@@ -30,19 +30,5 @@ services:
       - TZ=Europe/Zurich
       - PYTHONUNBUFFERED=1
       
-# NEU: Der Türsteher
-  nginx:
-    image: nginx:latest
-    container_name: lunch_nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - static_volume:/app/staticfiles
-      
-    depends_on:
-      - lunch_web
-    restart: always
-    
 volumes:
   static_volume:

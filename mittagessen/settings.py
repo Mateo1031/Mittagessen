@@ -34,6 +34,9 @@ CSRF_TRUSTED_ORIGINS = [
     'https://mittagessen.adeon.ch', # Gut, wenn du später SSL/HTTPS hast
 ]
 
+# Sagt Django, dass es dem Türsteher vertrauen kann, dass die Verbindung sicher ist.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Application definition
 
 INSTALLED_APPS = [
