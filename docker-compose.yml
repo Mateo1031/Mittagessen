@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  lunch_web:
+    build: .
+    container_name: lunch_app
+    restart: always
+    environment:
+      - TZ=Europe/Zurich
+      - ADMIN_EMAIL=m.ruiz@adeon.ch
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    volumes:
+      - ./db_data:/app/db_data
+      - static_volume:/app/staticfiles
+    command: sh -c "python manage.py migrate && gunicorn mittagessen.wsgi:application --bind 0.0.0.0:8000 --timeout 90 --workers 3"
+
+  lunch_wecker:
+    build: .
+    container_name: lunch_wecker
+    restart: always
+    command: python manage.py send_daily_reminder
+    volumes:
+      - ./db_data:/app/db_data
+      - /home/mateo/backups/db_backups:/app/backups/db_backups
+      - /home/mateo/backups/full_backups:/app/backups/full_backups
+    environment:
+      - TZ=Europe/Zurich
+      - PYTHONUNBUFFERED=1
+      
+# NEU: Der Türsteher
+  nginx:
+    image: nginx:latest
+    container_name: lunch_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/staticfiles
+      
+    depends_on:
+      - lunch_web
+    restart: always
+    
+volumes:
+  static_volume:

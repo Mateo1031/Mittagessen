@@ -1,0 +1,159 @@
+{% extends 'lunch_app/base.html' %}
+{% load static %}
+
+{% block content %}
+
+<div id="page-loader" class="modal-overlay" style="display: none; z-index: 3000;">
+    <div class="loader-content">
+        <div class="spinner"></div>
+        <p>Hole Menüs...</p>
+    </div>
+</div>
+
+<div class="full-screen-wrapper">
+    <div class="center-content">
+        <div class="welcome-header">
+            {% if ist_abwesend %}
+                <div style="background: #fffbeb; border: 1px solid #fef3c7; color: #92400e; padding: 12px; border-radius: 10px; margin-bottom: 20px; text-align: center; font-size: 0.9rem;">
+                    🌴 Du bist aktuell als <strong>abwesend</strong> markiert (bis {{ abwesend_bis|date:"d.m.Y" }}). 
+                    Du erhältst keine E-Mail Benachrichtigungen.
+                </div>
+            {% endif %}
+            <h1>Wie möchtest du heute essen?</h1>
+            {% if existing_order_art %}
+                <p style="color: #f59e0b; font-weight: 600;">
+                    Du hast bereits für <u>{{ existing_order_art }}</u> bestellt.
+                </p>
+            {% else %}
+                <p>Wähle eine Option, um passende Restaurants zu sehen.</p>
+            {% endif %}
+        </div>
+
+        <div class="welcome-grid">
+            
+            <a href="#" 
+               data-target="{% url 'restaurant_liste' 'LOKAL' %}"
+               class="welcome-card card-lokal 
+                      {% if existing_order_art and existing_order_art != 'LOKAL' %}locked js-locked{% else %}js-open{% endif %} 
+                      {% if existing_order_art == 'LOKAL' %}active-choice{% endif %}"
+               data-own-type="LOKAL"
+               data-existing-type="{{ existing_order_art }}"
+               data-cancel="{% url 'eigene_stornieren' %}">
+                
+                {% if existing_order_art == 'LOKAL' %}<div class="active-badge">Deine Auswahl</div>{% endif %}
+                <div class="icon">🍽️</div>
+                <div class="text"><h3>Im Restaurant</h3><p>Gemütlich vor Ort</p></div>
+            </a>
+
+            <a href="#"
+               data-target="{% url 'restaurant_liste' 'TAKEAWAY' %}"
+               class="welcome-card card-takeaway 
+                      {% if existing_order_art and existing_order_art != 'TAKEAWAY' %}locked js-locked{% else %}js-open{% endif %} 
+                      {% if existing_order_art == 'TAKEAWAY' %}active-choice{% endif %}"
+               data-own-type="TAKEAWAY"
+               data-existing-type="{{ existing_order_art }}"
+               data-cancel="{% url 'eigene_stornieren' %}">
+
+                {% if existing_order_art == 'TAKEAWAY' %}<div class="active-badge">Deine Auswahl</div>{% endif %}
+                <div class="icon">🥡</div>
+                <div class="text"><h3>Take-Away</h3><p>Abholen & mitnehmen</p></div>
+            </a>
+
+            <a href="#"
+               data-target="{% url 'restaurant_liste' 'DELIVERY' %}"
+               class="welcome-card card-delivery 
+                      {% if existing_order_art and existing_order_art != 'DELIVERY' %}locked js-locked{% else %}js-open{% endif %} 
+                      {% if existing_order_art == 'DELIVERY' %}active-choice{% endif %}"
+               data-own-type="DELIVERY"
+               data-existing-type="{{ existing_order_art }}"
+               data-cancel="{% url 'eigene_stornieren' %}">
+
+                {% if existing_order_art == 'DELIVERY' %}<div class="active-badge">Deine Auswahl</div>{% endif %}
+                <div class="icon">🛵</div>
+                <div class="text"><h3>Lieferung</h3><p>Bequem liefern lassen</p></div>
+            </a>
+
+        </div>
+
+        {% if existing_order_art %}
+            <div style="text-align: center; margin-top: 40px; transform: scale(1.2);">
+                <br><br>
+                <a href="#" class="btn-cancel-order js-confirm-btn" 
+                   data-href="{% url 'eigene_stornieren' %}"
+                   data-msg="Willst du deine gesamte Bestellung stornieren?">
+                    🗑️ Bestellung stornieren
+                </a>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<div id="confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-icon">⚠️</div>
+        <h3 class="modal-title">Bist du sicher?</h3>
+        <p id="modal-message" class="modal-text">Möchtest du das wirklich tun?</p>
+        <div class="modal-actions">
+            <button id="modal-cancel-btn" class="btn-modal-cancel">Abbrechen</button>
+            <a id="modal-confirm-btn" href="#" class="btn-modal-confirm">Ja, fortfahren</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .loader-content { text-align: center; color: white; font-weight: 500; animation: scaleUp 0.3s; }
+    .spinner { width: 50px; height: 50px; margin: 0 auto 20px auto; border: 5px solid rgba(255,255,255,0.3); border-top: 5px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(5px); z-index: 2000; display: none; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
+    .modal-card { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); animation: scaleUp 0.2s ease-out; }
+    .modal-icon { font-size: 3rem; margin-bottom: 15px; }
+    .modal-title { margin: 0 0 10px 0; color: #1e293b; font-size: 1.5rem; }
+    .modal-text { color: #64748b; margin-bottom: 25px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 15px; justify-content: center; }
+    .btn-modal-cancel { padding: 10px 20px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-modal-cancel:hover { background: #e2e8f0; color: #334155; }
+    .btn-modal-confirm { padding: 10px 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+    .btn-modal-confirm:hover { transform: translateY(-2px); }
+    
+    @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden !important; width: 100%; position: fixed; }
+    .full-screen-wrapper { height: 100vh; width: 100%; display: flex; justify-content: center; align-items: center; padding-top: 0; padding-bottom: 40px; box-sizing: border-box; }
+    .center-content { width: 100%; max-width: 1000px; padding: 0 20px; box-sizing: border-box; opacity: 0; animation: simpleFade 0.5s ease-out forwards; }
+    @keyframes simpleFade { to { opacity: 1; transform: translateY(0); } from { opacity: 0; transform: translateY(20px); } }
+    
+    .welcome-header { text-align: center; margin-bottom: 50px; }
+    .welcome-header h1 { color: #1e293b; margin-bottom: 10px; font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
+    .welcome-header p { color: #64748b; font-size: 1.1rem; margin: 0; }
+    
+    .welcome-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; width: 100%; }
+    .welcome-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-radius: 24px; padding: 40px 20px; text-align: center; text-decoration: none; color: #334155; border: 2px solid rgba(255, 255, 255, 0.5); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; height: 100%; position: relative; transition: all 0.2s; }
+    
+    .welcome-card:not(.locked):hover { transform: translateY(-8px); background: white; box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1); }
+    .welcome-card.locked { opacity: 0.6; cursor: pointer !important; filter: grayscale(100%); background: rgba(241, 245, 249, 0.7); pointer-events: auto; }
+    .welcome-card.locked:hover { background: rgba(241, 245, 249, 1); }
+    .welcome-card.active-choice { border-color: #10b981; background: white; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15); }
+    
+    .active-badge { position: absolute; top: -12px; background: #10b981; color: white; font-size: 0.8rem; padding: 4px 12px; border-radius: 20px; font-weight: 700; }
+    .icon { font-size: 4rem; margin-bottom: 10px; }
+    .text h3 { margin: 0 0 5px 0; font-size: 1.4rem; font-weight: 700; color: #1e293b; }
+    .text p { margin: 0; color: #64748b; font-weight: 500; }
+    
+    .card-lokal:not(.locked):hover { border-color: #38bdf8; }
+    .card-takeaway:not(.locked):hover { border-color: #f59e0b; }
+    .card-delivery:not(.locked):hover { border-color: #10b981; }
+    .btn-cancel-order { display: inline-block; color: #ef4444; text-decoration: none; font-weight: 600; border: 1px solid #fee2e2; background: #fef2f2; padding: 10px 20px; border-radius: 8px; transition: all 0.2s; margin-top: 15px;}
+    
+    @media (max-width: 900px) {
+        .welcome-grid { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+        .welcome-card { flex-direction: row; padding: 15px 20px; text-align: left; justify-content: flex-start; align-items: center; gap: 15px; }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/welcome.js' %}"></script>
+{% endblock %}

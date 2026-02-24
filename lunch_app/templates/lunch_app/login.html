@@ -1,11 +1,192 @@
 {% extends 'lunch_app/base.html' %}
+{% load static %}
+
 {% block content %}
-<div class="card" style="max-width: 400px; margin: auto;">
-    <h2>Login</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="btn">Einloggen</button>
-    </form>
+
+<style>
+    /* 1. Globales Reset für diese Seite */
+    body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* VERHINDERT SCROLLEN (Links/Rechts & Oben/Unten) */
+    }
+
+    /* 2. Hintergrundbild & Wrapper */
+    .auth-wrapper {
+        position: fixed; /* Fixiert über allem */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: url('https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=2070&auto=format&fit=crop') no-repeat center center;
+        background-size: cover;
+        z-index: 9999; /* Damit überdeckt es auch die Navbar aus base.html */
+    }
+
+    /* 3. Dunkler Overlay (Damit Text lesbar ist) */
+    .auth-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.5); /* Etwas dunkler */
+        backdrop-filter: blur(4px);
+    }
+
+    /* 4. Die Karte (Glassmorphism) */
+    .auth-card {
+        position: relative;
+        z-index: 10000;
+        background: rgba(255, 255, 255, 0.9); /* Weniger transparent für bessere Lesbarkeit */
+        width: 90%;
+        max-width: 400px;
+        padding: 40px 30px;
+        border-radius: 20px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        text-align: center;
+        animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(30px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* 5. Inhalte */
+    .auth-icon { font-size: 3.5rem; display: block; margin-bottom: 10px; }
+    
+    .auth-header h2 {
+        margin: 0;
+        color: #1e293b;
+        font-size: 1.8rem;
+        font-weight: 800;
+    }
+    
+    .auth-header p {
+        color: #64748b;
+        margin-top: 5px;
+        margin-bottom: 30px;
+    }
+
+    /* Formular */
+    .form-group { text-align: left; margin-bottom: 15px; }
+    
+    .form-group label {
+        display: block;
+        color: #475569;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+        margin-left: 5px;
+    }
+
+    .auth-form input {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+        box-sizing: border-box; /* WICHTIG gegen Überbreite */
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .auth-form input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Button */
+    .btn-auth {
+        width: 100%;
+        padding: 14px;
+        margin-top: 10px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+    .btn-auth:hover { transform: scale(1.02); }
+    .btn-auth:active { transform: scale(0.98); }
+
+    /* Footer & Links */
+    .auth-footer { margin-top: 25px; font-size: 0.9rem; color: #64748b; }
+    .auth-footer a { color: #2563eb; font-weight: 700; text-decoration: none; }
+    
+    .alert-error {
+        background: #fee2e2;
+        color: #b91c1c;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        text-align: left;
+    }
+
+    .forgot-password {
+        display: block;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 5px;
+        text-decoration: none;
+    }
+    .forgot-password:hover {
+        color: #2563eb;
+        text-decoration: underline;
+    }
+</style>
+
+<div class="auth-wrapper">
+    <div class="auth-overlay"></div>
+
+    <div class="auth-card">
+        <div class="auth-header">
+            <span class="auth-icon">🥗</span>
+            <h2>Willkommen zurück!</h2>
+            <p>Bitte einloggen.</p>
+        </div>
+
+        {% if form.errors %}
+            <div class="alert-error">
+                <strong>Hoppla!</strong> Benutzername oder Passwort falsch.
+            </div>
+        {% endif %}
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="id_username">E-Mail Adresse</label>
+                {{ form.username }}
+            </div>
+
+            <div class="form-group">
+                <label for="id_password">Passwort</label>
+                {{ form.password }}
+                <a href="{% url 'password_reset' %}" class="forgot-password">Passwort vergessen?</a>
+            </div>
+
+            <button type="submit" class="btn-auth">Anmelden</button>
+        </form>
+
+        <!--
+        <div class="auth-footer">
+            Neu hier? <a href="{% url 'register' %}">Account erstellen</a>
+        </div>
+        -->
+    </div>
 </div>
+
 {% endblock %}

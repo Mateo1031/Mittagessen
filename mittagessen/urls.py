@@ -9,4 +9,11 @@ urlpatterns = [
     # Standard Login/Logout Views von Django
     path('login/', auth_views.LoginView.as_view(template_name='lunch_app/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    
+    # 1. Login/Logout/Passwort URLs von Django
+    path('accounts/', include('django.contrib.auth.urls')), 
+    
+    # 2. Deine App URLs (Weiterleitung zur App)
+    path('', include('lunch_app.urls')),
 ]
+

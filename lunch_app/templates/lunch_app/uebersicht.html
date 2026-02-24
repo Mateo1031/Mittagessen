@@ -1,47 +1,469 @@
 {% extends 'lunch_app/base.html' %}
-
+{% load static %}
 {% block content %}
-<h2>📋 Bestellübersicht (Heute)</h2>
 
-<div class="card">
-    {% if user_daten %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Benutzer</th>
-                    <th>Bestellte Gerichte</th>
-                    <th>Summe pro Person</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user, daten in user_daten.items %}
-                <tr>
-                    <td style="vertical-align: top; font-weight: bold;">{{ user.username }}</td>
-                    <td>
-                        <ul style="margin: 0; padding-left: 20px;">
-                            {% for item in daten.items %}
-                                <li>
-                                    {{ item.gericht.name }} 
-                                    <small style="color: #666;">({{ item.gericht.restaurant.name }})</small>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </td>
-                    <td style="vertical-align: top; font-weight: bold;">
-                        {{ daten.summe }} CHF
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr style="background: #333; color: #fff; font-weight: bold;">
-                    <td colspan="2" style="text-align: right;">GESAMT TOTAL:</td>
-                    <td>{{ gesamt_total }} CHF</td>
-                </tr>
-            </tfoot>
-        </table>
+{% if user_hat_bestellt %}
+    {% for group_key, daten in restaurant_daten.items %}
+        {% for item in daten.items %}
+            {% if item.benutzer == request.user %}
+                <input type="hidden" id="target-menu-url" value="{% url 'menu' daten.restaurant_obj.id %}">
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+{% endif %}
+
+{% block extra_js %}
+<script src="{% static 'js/account.js' %}"></script>
+{% endblock %}
+
+<div class="action-header">
+    <a href="{% url 'restaurant_liste' current_art|default:'LOKAL' %}" class="btn-back">
+        ← Zurück zur Liste
+    </a>
+
+    <div class="action-buttons">
+        {% if user_hat_bestellt and not ist_zu_spaet %}
+            <a href="#" id="btn-edit-order" class="btn-edit-soft">✏️ Bestellung bearbeiten</a>
+        {% endif %}
+
+        {% if request.user.is_superuser %}
+            <a href="{% url 'tagesabschluss' %}" class="btn-admin-dark js-confirm" data-msg="Tag abschließen?">🏁 Tag abschließen</a>
+            <a href="{% url 'system_reset' %}" class="btn-admin-dark js-confirm" style="background-color: #dc2626; color: white;" data-msg="⚠️ Reset: Alles löschen?">💀 Reset</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="section-container">
+    <h3 class="section-title">📊 Status & Zusammenfassung</h3>
+    
+    {% if restaurant_daten %}
+        <div class="summary-grid">
+            {% for group_key, daten in restaurant_daten.items %}
+                
+                <div class="summary-card {% if daten.reached %}border-success{% else %}border-warning{% endif %}">
+                    
+                    <div class="card-header-flex">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <strong class="res-title">{{ daten.restaurant_obj.name }}</strong>
+                            <span class="type-badge {% if daten.art == 'LOKAL' %}type-lokal{% elif daten.art == 'TAKEAWAY' %}type-takeaway{% else %}type-delivery{% endif %}">
+                                {{ daten.art_display }}
+                            </span>
+                            
+                            {% if daten.restaurant_obj.website %}
+                                <a href="{{ daten.restaurant_obj.website }}" target="_blank" class="btn-website" title="Zur Webseite/Speisekarte">
+                                    🌐 <span class="desktop-only">Bestellen</span>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        {% if daten.reached %}
+                            <span class="status-badge badge-success">BEREIT</span>
+                        {% else %}
+                            <span class="status-badge badge-warning">OFFEN</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="organizer-section">
+                            <div class="organizer-active">
+                                </div>
+
+                            {% if daten.art == 'LOKAL' %}
+                                <div style="margin-top: 5px; margin-bottom: 20px; solid #e2e8f0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                        
+                                        <div style="font-size: 0.9rem; color: #475569;">
+                                            <span style="font-weight: 600;">🚗 Fahrer:</span>
+                                            {% if daten.fahrer_liste %}
+                                                {% for fahrer in daten.fahrer_liste %}
+                                                    <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; margin-right: 3px;">
+                                                        {{ fahrer.first_name|default:fahrer.username }}
+                                                    </span>
+                                                {% endfor %}
+                                            {% else %}
+                                                <span style="font-style: italic; color: #94a3b8;">Noch keine</span>
+                                            {% endif %}
+                                        </div>
+
+                                        {% if not daten.bestaetigt %}
+                                            <form action="{% url 'toggle_driver' daten.restaurant_obj.id %}" method="POST">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="art" value="{{ daten.art }}">
+                                                
+                                                {% if request.user in daten.fahrer_liste %}
+                                                    <button type="submit" style="background: #fee2e2; color: #ef4444; border: 1px solid #fecaca; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;">
+                                                        ❌ Nicht fahren
+                                                    </button>
+                                                {% else %}
+                                                    <button type="submit" style="background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;">
+                                                        🚗 Ich fahre
+                                                    </button>
+                                                {% endif %}
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% if daten.organizer %}
+                            <div class="organizer-active">
+                                <div class="organizer-avatar">{{ daten.organizer.username|slice:":2"|upper }}</div>
+                                <div class="organizer-details">
+                                    <span class="organizer-name">
+                                        <strong>{{ daten.organizer.get_full_name|default:daten.organizer.username }}</strong> 
+                                        {% if daten.art == 'LOKAL' %}reserviert{% elif daten.art == 'TAKEAWAY' %}holt ab{% else %}bestellt{% endif %}
+                                    </span>
+                                    
+                                    {% if daten.organizer == request.user %}
+                                        <div class="organizer-controls-wrapper">
+                                            
+                                            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; flex-wrap: wrap;">
+                                                
+                                                <form action="{% url 'set_order_time' daten.restaurant_obj.id %}" method="POST" class="time-form" style="display:flex; align-items:center; gap:5px;">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="art" value="{{ daten.art }}">
+                                                    <input type="time" name="bestellzeit" value="{{ daten.bestellzeit|default:'' }}" class="time-input" onchange="this.form.submit()" required {% if daten.bestaetigt %}disabled style="background-color: #f1f5f9; cursor: not-allowed;"{% endif %}>
+                                                    {% if not daten.bestaetigt %}<span style="font-size:0.75rem; color:#64748b;">(Zeit)</span>{% endif %}
+                                                </form>
+                                                {% if daten.art != 'LOKAL' %}
+                                                  <form action="{% url 'set_payment_method' daten.restaurant_obj.id %}" method="POST" style="display: flex; gap: 4px; margin: 0; align-items: center;">
+                                                      {% csrf_token %}
+                                                      <input type="hidden" name="art" value="{{ daten.art }}">
+                                                      <button type="submit" name="zahlungsart" value="TWINT_REQ" class="btn-pay {% if daten.zahlungsart == 'TWINT_REQ' %}active{% endif %}" title="TWINT Anfrage schicken" {% if daten.bestaetigt %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>📲 Twint-Anfrage senden</button>
+                                                      <button type="submit" name="zahlungsart" value="TWINT_SEND" class="btn-pay {% if daten.zahlungsart == 'TWINT_SEND' %}active{% endif %}" title="Per TWINT erhalten" {% if daten.bestaetigt %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>✅ Twint-Erhalten</button>
+                                                      <button type="submit" name="zahlungsart" value="SONST" class="btn-pay {% if daten.zahlungsart == 'SONST' %}active{% endif %}" title="Sonstiges" {% if daten.bestaetigt %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>📦 Sonstiges</button>
+                                                  </form>
+                                                {% endif %}
+                                                {% if not daten.bestaetigt %}
+                                                    <form action="{% url 'unclaim_order' daten.restaurant_obj.id %}" method="POST" style="margin-left: auto;">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="art" value="{{ daten.art }}">
+                                                        <button type="submit" class="btn-unclaim" title="Abgeben">❌</button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+
+                                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">
+                                                {% if daten.bestaetigt %}
+                                                    <button class="btn-confirmed-static" disabled>✅ Erledigt!</button>
+                                                    
+                                                {% elif not daten.reached %}
+                                                    <button class="btn-confirmed-static" disabled style="background: #fee2e2; color: #991b1b; border-color: #fecaca; opacity: 1;">
+                                                        ⚠️ Noch {{ daten.missing|floatformat:2 }} CHF offen
+                                                    </button>
+                                                    
+                                                {% else %}
+                                                    <form action="{% url 'confirm_order_placed' daten.restaurant_obj.id %}" method="POST" style="width: 100%;">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="art" value="{{ daten.art }}">
+                                                        <button type="submit" class="btn-confirm-action js-confirm-btn" 
+                                                            data-msg="Wirklich bestätigen? Mail wird gesendet."
+                                                            {% if not request.user.profile.show_phone %}
+                                                            data-phone-private="true"
+                                                            {% endif %}
+                                                            style="border:none; cursor:pointer; width:100%;">
+                                                            ✅ Jetzt bestätigen
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+
+                                        </div>
+                                    {% else %}
+                                        <div class="organizer-time" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                                            <div>
+                                                {% if daten.bestellzeit %}
+                                                    🕒 {% if daten.art == 'LOKAL' %}Reserviert:{% else %}Zeit:{% endif %} <strong>{{ daten.bestellzeit }}</strong>
+                                                {% else %}
+                                                    <span style="color:#f59e0b; font-size:0.8rem;">🕒 Zeit offen</span>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <div style="font-size: 0.8rem; background: #f8fafc; padding: 5px 10px; border-radius: 6px; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 6px; width: fit-content;">
+                                                <span style="color: #64748b;">Bezahlung:</span>
+                                                <strong style="color: #334155;">
+                                                    {% if daten.zahlungsart == 'TWINT_REQ' %}📲 TWINT (Anfrage kommt)
+                                                    {% elif daten.zahlungsart == 'TWINT_SEND' %}✅ TWINT (Bitte senden)
+                                                    {% else %}📦 Sonstiges{% endif %}
+                                                </strong>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                </div>
+                            </div>
+                        {% else %}
+                            <form action="{% url 'claim_order' daten.restaurant_obj.id %}" method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="art" value="{{ daten.art }}">
+                                <button type="submit" class="btn-volunteer">✋ Ich übernehme</button>
+                            </form>
+                        {% endif %}
+                    </div>
+
+                    {% if daten.mindestwert > 0 %}
+                        <div class="progress-section">
+                            <div class="progress-labels"><span>{{ daten.summe|floatformat:2 }}</span><span>Ziel: {{ daten.mindestwert|floatformat:2 }}</span></div>
+                            <div class="progress-track"><div class="progress-fill" style="width: {{ daten.percent|stringformat:'d' }}%; background: {% if daten.reached %}#10b981{% else %}#f59e0b{% endif %};"></div></div>
+                        </div>
+                    {% endif %}
+                    
+                    <hr class="card-divider">
+                    
+                    <ul class="summary-list">
+                        {% for key, g_info in daten.zusammenfassung.items %}
+                            <li class="order-item-data" title="Klicken zum Abhaken" data-count="{{ g_info.anzahl }}" data-name="{{ g_info.name }}" data-note="{{ g_info.notiz|default:'' }}">
+                                <div style="display:none;" class="js-options-source">{% for opt in g_info.optionen_liste %}• {{ opt }}|{% endfor %}</div>
+                                <div class="list-item-container">
+                                    <div class="list-item-top">
+                                        <span class="count-badge">{{ g_info.anzahl }}x</span>
+                                        <span class="dish-name">{{ g_info.name }}</span>
+                                        <span class="price-tag">{{ g_info.preis|floatformat:2 }} CHF</span>
+                                    </div>
+                                    {% if g_info.optionen_liste %}
+                                        <ul class="option-list-vertical">{% for opt in g_info.optionen_liste %}<li><span>•</span> {{ opt }}</li>{% endfor %}</ul>
+                                    {% endif %}
+                                    {% if g_info.notiz %}<div class="dish-note">↳ 📝 {{ g_info.notiz }}</div>{% endif %}
+                                </div>                                
+                            </li>
+                        {% endfor %}
+                        {% if daten.restaurant_obj.liefergebuehren > 0 %}
+                            <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top text-muted" style="font-size: 0.9rem;">
+                                <span>
+                                    🛵 Liefergebühren ({{ daten.restaurant_obj.liefergebuehren }} CHF geteilt durch alle)
+                                </span>
+                                <span class="text-success fw-bold">
+                                    + {{ daten.anteil_pro_person|floatformat:2 }} CHF p.P.
+                                </span>
+                            </div>
+                        {% endif %}
+                    </ul>
+                    <div class="hidden-total" data-total="{{ daten.summe|floatformat:2 }}" style="display:none;"></div>
+                </div>
+            {% endfor %}
+        </div>
     {% else %}
-        <p style="padding: 20px; text-align: center;">Heute gibt es noch keine Bestellungen.</p>
+        <div class="empty-state-card"><p>Noch keine Bestellungen heute.</p></div>
     {% endif %}
 </div>
+
+<h3 class="section-title" style="margin-top: 40px;">📋 Details</h3>
+
+{% if restaurant_daten %}
+    {% for group_key, daten in restaurant_daten.items %}
+    <div class="detail-card">
+        <div class="detail-header">
+            <div class="header-left">
+                <span class="icon">🍽️</span>
+                <span class="title">{{ daten.restaurant_obj.name }} ({{ daten.art_display }})</span>
+            </div>
+            <span class="sum-badge">Summe: {{ daten.summe|floatformat:2 }} CHF</span>
+        </div>
+        <div class="table-responsive">
+            <table class="detail-table">
+                <thead>
+                    <tr><th style="width: 25%;">Wer?</th><th>Was?</th><th style="text-align: right; width: 20%;">Preis</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in daten.items %}
+                    <tr>
+                        <td class="user-cell">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="user-name-text">{{ item.benutzer.get_full_name|default:item.benutzer.username }}</span>
+                                {% if item.mein_lieferanteil > 0 %}
+                                    <span class="badge bg-secondary ms-2" style="font-size: 0.7rem; font-weight: normal;">
+                                        + {{ item.mein_lieferanteil|floatformat:2 }} CHF Anteil Lieferung
+                                    </span>
+                                {% endif %}
+                                {% if item.benutzer != request.user and not ist_zu_spaet %}
+                                    <a href="{% url 'copy_other_order' item.benutzer.id %}" class="btn-copy-user js-confirm" data-msg="Kopieren?">👯</a>
+                                {% endif %}
+                                
+                            </div>
+                        </td>
+                        <td>
+                            <div class="dish-cell-content">
+                                <span class="dish-name-bold">{{ item.gericht.name }}</span>
+                                {% if item.optionen_liste_split %}
+                                    <ul class="option-list-vertical-small">{% for opt in item.optionen_liste_split %}<li>• {{ opt }}</li>{% endfor %}</ul>
+                                {% endif %}
+                                {% if item.notiz %}<div class="dish-note-small">📝 {{ item.notiz }}</div>{% endif %}
+                                <div class="meta-row">
+                                    <span class="type-badge {% if item.art == 'LOKAL' %}type-lokal{% elif item.art == 'TAKEAWAY' %}type-takeaway{% else %}type-delivery{% endif %}">{{ item.get_art_display }}</span>
+                                    {% if request.user.is_superuser or item.benutzer == request.user and not ist_zu_spaet %}
+                                        <a href="{% url 'stornieren' item.id %}" class="btn-delete-item js-confirm" data-msg="Löschen?">×</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="price-cell">
+                            {% if item.lokal_anmeldung %}
+                                <span style="color: #94a3b8; font-style: italic;">Vor Ort</span>
+                            {% else %}
+                                {{ item.kalkulierter_preis|floatformat:2 }} CHF
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    <div class="total-footer"><span class="total-label">Total:</span><span class="total-amount">{{ gesamt_total|floatformat:2 }} CHF</span></div>
+{% else %}
+    <div class="empty-state-card"><p>Keine Bestellungen.</p><a href="{% url 'home' %}" class="btn-primary-link">Erste Bestellung für heute erstellen</a></div>
+{% endif %}
+
+<div id="confirm-modal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-icon">⚠️</div>
+        <h3 class="modal-title">Sicher?</h3>
+        <p id="modal-message" class="modal-text">...</p>
+        <div class="modal-actions">
+            <button id="modal-cancel-btn" class="btn-modal-cancel">Abbrechen</button>
+            <a id="modal-confirm-btn" href="#" class="btn-modal-confirm">Ja</a>
+        </div>
+    </div>
+</div>
+<div id="toast" class="toast-message">📋 Text kopiert!</div>
+
+<style>
+    /* CSS FÜR DIE 3 KNÖPFE */
+    .btn-pay { font-size: 0.75rem; padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #64748b; cursor: pointer; transition: all 0.2s; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .btn-pay:hover { background: #f8fafc; border-color: #94a3b8; color: #334155; }
+    .btn-pay.active { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; box-shadow: inset 0 0 0 1px #93c5fd; }
+
+    /* DEIN ORIGINAL CSS */
+    .type-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+    .type-lokal { background: #e0f2fe; color: #0284c7; }
+    .type-takeaway { background: #fffbeb; color: #d97706; }
+    .type-delivery { background: #dcfce7; color: #15803d; }
+    .organizer-controls-wrapper { margin-top: 5px; width: 100%; }
+    .btn-confirmed-static { width: 100%; padding: 10px; background-color: #e2e8f0; color: #64748b; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: not-allowed; opacity: 0.8; }
+    .btn-confirm-action { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 10px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; box-shadow: 0 2px 5px rgba(16, 185, 129, 0.2); }
+    .btn-confirm-action:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
+    .order-item-data.checked { opacity: 0.4; text-decoration: line-through; background-color: #f1f5f9; filter: grayscale(100%); }
+    .organizer-section { margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; transition: all 0.2s; }
+    .organizer-section:hover { border-color: #94a3b8; background: #f1f5f9; }
+    .btn-volunteer { width: 100%; padding: 12px; background: white; border: 2px dashed #3b82f6; color: #3b82f6; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 0.95rem; }
+    .btn-volunteer:hover { background: #eff6ff; border-color: #2563eb; color: #2563eb; transform: translateY(-1px); }
+    .organizer-active { display: flex; align-items: flex-start; gap: 12px; }
+    .organizer-avatar { width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
+    .organizer-details { display: flex; flex-direction: column; font-size: 0.9rem; flex-grow: 1; }
+    .organizer-name { color: #1e293b; margin-bottom: 2px; font-size: 1rem; }
+    .time-input { padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.9rem; background: white; color: #1e293b; cursor: pointer; transition: border-color 0.2s; }
+    .time-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+    .organizer-time { font-size: 0.9rem; color: #64748b; margin-top: 4px; }
+    .btn-unclaim { background: white; border: 1px solid #fecaca; color: #ef4444; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-size: 0.8rem; }
+    .btn-unclaim:hover { background: #fef2f2; border-color: #ef4444; transform: scale(1.1); }
+    .order-item-data { cursor: pointer; transition: all 0.2s ease; padding: 8px 12px !important; border-radius: 8px; user-select: none; }
+    .order-item-data:hover { background-color: #f8fafc; }
+    .btn-edit-soft { padding: 8px 16px; background-color: #eff6ff; color: #2563eb; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #dbeafe; transition: all 0.2s; font-size: 0.9rem; cursor: pointer; }
+    .btn-edit-soft:hover { background-color: #dbeafe; color: #1d4ed8; }
+    .option-list-vertical { list-style: none; padding: 0; margin: 4px 0 0 30px; line-height: 1.4; font-size: 0.85rem; color: #64748b; font-weight: 400; }
+    .option-list-vertical li { display: block; margin-bottom: 2px; }
+    .option-list-vertical li span { color: #cbd5e1; margin-right: 5px; }
+    .option-list-vertical-small { list-style: none; padding: 0; margin: 4px 0 8px 0; font-size: 0.8rem; color: #64748b; font-weight: 400; }
+    .option-list-vertical-small li { display: block; margin-bottom: 2px; }
+    .dish-note { margin-left: 30px; font-size: 0.85rem; color: #ef4444; font-style: italic; font-weight: 500; margin-top: 4px; }
+    .dish-note-small { color: #ef4444; font-size: 0.8rem; font-style: italic; margin-bottom: 5px; }
+    .list-item-container { width: 100%; display: flex; flex-direction: column; }
+    .list-item-top { display: flex; gap: 8px; width: 100%; align-items: baseline; }
+    .btn-copy { background: white; border: 1px solid #e2e8f0; color: #475569; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-weight: 600; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .btn-copy:hover { background: #f8fafc; border-color: #cbd5e1; color: #1e293b; transform: translateY(-1px); }
+    .btn-copy:active { transform: translateY(1px); }
+    .btn-website { background-color: #f0f9ff; color: #0284c7; text-decoration: none; border: 1px solid #bae6fd; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; gap: 5px; }
+    .btn-website:hover { background-color: #0284c7; color: white; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(2, 132, 199, 0.2); }
+    .btn-copy-user { background-color: #e0f2fe; color: #0284c7; text-decoration: none; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; transition: all 0.2s; border: 1px solid #bae6fd; }
+    .btn-copy-user:hover { background-color: #0284c7; color: white; transform: scale(1.1); }
+    .toast-message { visibility: hidden; min-width: 200px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 8px; padding: 12px; position: fixed; z-index: 3000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s, bottom 0.3s; font-weight: 500; }
+    .toast-message.show { visibility: visible; opacity: 1; bottom: 50px; }
+    .action-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
+    .btn-back { padding: 8px 16px; background-color: white; color: #64748b; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 0.9rem; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s; }
+    .btn-back:hover { background: #f8fafc; color: #334155; transform: translateX(-2px); }
+    .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .btn-danger-soft { padding: 8px 16px; background-color: #fef2f2; color: #ef4444; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #fee2e2; transition: all 0.2s; font-size: 0.9rem; cursor: pointer; }
+    .btn-danger-soft:hover { background-color: #fee2e2; color: #dc2626; }
+    .btn-admin-dark { padding: 8px 16px; background-color: #1e293b; color: #fcd34d; text-decoration: none; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s; cursor: pointer; }
+    .btn-admin-dark:hover { background-color: #0f172a; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .section-title { font-size: 1.5rem; color: #1e293b; margin-bottom: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; }
+    .summary-card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border-top: 4px solid transparent; display: flex; flex-direction: column; }
+    .border-success { border-top-color: #10b981; }
+    .border-warning { border-top-color: #f59e0b; }
+    .card-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .res-title { font-size: 1.25rem; color: #1e293b; }
+    .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.5px; }
+    .badge-success { background: #d1fae5; color: #059669; }
+    .badge-warning { background: #fef3c7; color: #d97706; }
+    .progress-section { margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #f1f5f9; }
+    .progress-labels { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px; color: #64748b; font-weight: 500; }
+    .progress-track { background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .progress-fill { height: 100%; transition: width 0.5s ease-out; }
+    .progress-footer { text-align: right; font-size: 0.85rem; }
+    .missing-text { color: #ef4444; }
+    .success-text { color: #10b981; font-weight: 700; }
+    .card-divider { border: 0; border-top: 1px solid #f1f5f9; margin: 0 0 20px 0; }
+    .summary-list { list-style: none; padding: 0; margin: 0; color: #475569; font-size: 0.95rem; }
+    .summary-list li { display: flex; align-items: flex-start; margin-bottom: 12px; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #f8fafc; }
+    .summary-list li:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .count-badge { font-weight: 700; color: #1e293b; min-width: 25px; }
+    .dish-name { flex-grow: 1; font-weight: 500; }
+    .price-tag { color: #94a3b8; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+    .detail-card { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 30px; overflow: hidden; border: 1px solid #f1f5f9; }
+    .detail-header { background: #f8fafc; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 10px; }
+    .header-left .icon { font-size: 1.2rem; margin-right: 10px; }
+    .header-left .title { font-weight: 700; font-size: 1.1rem; color: #1e293b; }
+    .sum-badge { background: white; padding: 5px 12px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; color: #334155; border: 1px solid #e2e8f0; }
+    .table-responsive { width: 100%; }
+    .detail-table { width: 100%; border-collapse: collapse; font-family: 'Poppins', sans-serif; }
+    .detail-table th { background: white; padding: 15px 20px; text-align: left; color: #64748b; font-weight: 600; font-size: 0.85rem; border-bottom: 2px solid #f1f5f9; text-transform: uppercase; letter-spacing: 0.5px; }
+    .detail-table td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .detail-table tr:last-child td { border-bottom: none; }
+    .user-cell { font-weight: 600; color: #334155; }
+    .dish-name-bold { font-weight: 600; color: #1e293b; display: block; margin-bottom: 4px; }
+    .meta-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .price-cell { text-align: right; font-weight: 600; color: #475569; white-space: nowrap; }
+    .total-footer { text-align: right; margin-top: 30px; margin-bottom: 50px; padding: 20px; background: white; border-radius: 16px; display: flex; justify-content: flex-end; align-items: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); gap: 15px; }
+    .total-label { font-size: 1.1rem; color: #64748b; font-weight: 500; }
+    .total-amount { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 1.3rem; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
+    .empty-state-card { background: white; padding: 60px 20px; border-radius: 16px; text-align: center; color: #64748b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .btn-primary-link { display: inline-block; margin-top: 15px; color: #2563eb; text-decoration: none; font-weight: 600; }
+    .btn-primary-link:hover { text-decoration: underline; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(5px); z-index: 2000; display: none; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
+    .modal-card { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: scaleUp 0.2s ease-out; }
+    .modal-icon { font-size: 3rem; margin-bottom: 15px; }
+    .modal-title { margin: 0 0 10px 0; color: #1e293b; font-size: 1.5rem; }
+    .modal-text { color: #64748b; margin-bottom: 25px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 15px; justify-content: center; }
+    .btn-modal-cancel { padding: 10px 20px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-modal-cancel:hover { background: #e2e8f0; color: #334155; }
+    .btn-modal-confirm { padding: 10px 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3); transition: all 0.2s; }
+    .btn-modal-confirm:hover { transform: translateY(-2px); box-shadow: 0 6px 10px rgba(239, 68, 68, 0.4); }
+    .btn-modal-confirm-dark { background: #1e293b; box-shadow: 0 4px 6px rgba(30, 41, 59, 0.3); }
+    /* Style für das kleine rote X zum Löschen */
+    .btn-delete-item {
+        color: #ef4444; /* Rot */
+        text-decoration: none;
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        opacity: 0.5;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .btn-delete-item:hover {
+        opacity: 1;
+        background-color: #fef2f2; /* Hellrot im Hintergrund */
+        transform: scale(1.1);
+    }
+    @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
 {% endblock %}

@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,18 +19,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#+k13@a)t+jx^@#xt8-sph-e=478!vaau1&iiidq_@3ald)4t9'
+# Den Key aus den Umgebungsvariablen holen (mit einem unsicheren Fallback für lokale Tests)
+SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-key-nur-fuer-lokal')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG ist nur True, wenn in der .env explizit "True" steht, sonst immer False (Sicherheit!)
+DEBUG = os.environ.get('DEBUG') == 'True'
 
-ALLOWED_HOSTS = ['mittagessen.pythonanywhere.com']
+# WICHTIG: Wenn DEBUG = False ist, MUSST du Hosts erlauben
+ALLOWED_HOSTS = ['mittagessen.adeon.ch', 'localhost', '127.0.0.1'] 
+# (Trag hier die IP deiner VM oder deine Domain ein)
 
+CSRF_TRUSTED_ORIGINS = [
+    'http://mittagessen.adeon.ch',
+    'https://mittagessen.adeon.ch', # Gut, wenn du später SSL/HTTPS hast
+]
 
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,6 +49,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -55,13 +63,15 @@ ROOT_URLCONF = 'mittagessen.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'lunch_app' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'lunch_app.context_processors.standort_processor',
+                'lunch_app.context_processors.globale_einstellungen',
             ],
         },
     },
@@ -76,7 +86,7 @@ WSGI_APPLICATION = 'mittagessen.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / 'db_data' / 'db.sqlite3',
     }
 }
 
@@ -84,20 +94,7 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+AUTH_PASSWORD_VALIDATORS = []
 
 
 # Internationalization
@@ -111,18 +108,93 @@ USE_I18N = True
 
 USE_TZ = True
 
+ADMIN_FEEDBACK_EMAIL = os.environ.get('ADMIN_EMAIL', 'm.ruiz@adeon.ch')
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'  # <-- Hier fehlte der erste Slash!
 
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 # mittagessen/settings.py
 
 # ... ganz am Ende der Datei einfügen:
+
+LOGIN_URL = 'login'
 
 # Wohin soll man nach dem Login geleitet werden? -> Zur Startseite (Name der URL ist 'home')
 LOGIN_REDIRECT_URL = 'home'
 
 # Wohin nach dem Logout? -> Zur Login-Seite
 LOGOUT_REDIRECT_URL = 'login'
+
+
+# mysite/settings.py
+
+# 1. Wir nutzen den echten SMTP-Versand
+#EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# 2. Verbindung zu Postfix auf dem gleichen Server
+EMAIL_HOST = 'postfix.adeon.ch'
+EMAIL_PORT = 25
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = False
+
+# Da Postfix auf localhost meist keine Authentifizierung braucht (für lokale Apps):
+EMAIL_HOST_USER = ''
+EMAIL_HOST_PASSWORD = ''
+
+# 3. WICHTIG: Absender-Adresse
+# Diese Domain muss auf deinen Server zeigen!
+# Z.B. 'Lunch App <info@mittagessen.adeon.ch>'
+DEFAULT_FROM_EMAIL = 'Lunch App <noreply@mittagessen.adeon.ch>'
+SERVER_EMAIL = 'alert@mittagessen.adeon.ch'  # Für Fehlerberichte an Admins
+
+JAZZMIN_SETTINGS = {
+    "site_title": "Lunch App Admin",
+    "site_header": "Lunch App",
+    "site_brand": "Lunch Management",
+    "site_logo": "images/essen.png",
+    "custom_css": "css/admin_fix.css",
+    "login_logo": None,
+    "welcome_sign": "Willkommen im Lunch App Dashboard",
+    "copyright": "Lunch-App 2026",
+    "search_model": ["auth.User", "lunch_app.Gericht"],
+    "changeform_format": "single",
+    "topmenu_links": [
+        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Zur Webseite", "url": "home"},
+    ],
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.user": "fas fa-user",
+        "auth.group": "fas fa-users",
+        "lunch_app.Restaurant": "fas fa-store",
+        "lunch_app.Gericht": "fas fa-utensils",
+        "lunch_app.Bestellung": "fas fa-shopping-cart",
+        "lunch_app.Stimme": "fas fa-vote-yea",
+        "lunch_app.Favorit": "fas fa-heart",
+        "lunch_app.UserProfile": "fas fa-id-card",
+        "lunch_app.Schulden": "fas fa-money-bill-wave",
+        "lunch_app.TagesVerantwortlicher": "fas fa-user-tie",
+        "lunch_app.OptionGroup": "fas fa-layer-group",
+        "lunch_app.Standort": "fas fa-map-marker-alt",
+        "lunch_app.OptionItem": "fas fa-list-ul",
+        "lunch_app.SystemEinstellungen": "fas fa-cog",
+    },
+}
+
+# Erlaubt größere Formulare (Standard ist 1000)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+AUTHENTICATION_BACKENDS = [
+    'lunch_app.backends.EmailBackend',  # Unser neuer E-Mail-Check (Zuerst!)
+    'django.contrib.auth.backends.ModelBackend',  # Fallback (Sicherheitshalber)
+]

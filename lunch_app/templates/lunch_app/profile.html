@@ -1,0 +1,490 @@
+{% extends 'lunch_app/base.html' %}
+{% load static %}
+
+{% block content %}
+
+{% block extra_js %}
+<script src="{% static 'js/account.js' %}"></script>
+{% endblock %}
+
+<div class="profile-wrapper">
+    <div class="profile-header">
+        <div class="avatar-large">
+            {{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}
+        </div>
+        <h1 class="username-title">{{ user.get_full_name }}</h1>
+        <p class="user-meta">Mitglied seit {{ user.date_joined|date:"d.m.Y" }}</p>
+    </div>
+
+    <div class="profile-grid">
+        
+        <div class="finance-card card-green">
+            <div class="finance-header">
+                <span class="icon">💰</span>
+                <div>
+                    <h3>Du bekommst</h3>
+                    <span class="amount positive">+{{ total_guthaben|floatformat:2 }} CHF</span>
+                </div>
+            </div>
+            <div class="finance-list">
+                {% for item in guthaben_liste %}
+                    <div class="finance-item clickable-row" onclick="togglePhone('phone-guthaben-{{ item.schuldner }}-{{ item.datum|date:'Ymd' }}')" title="Nummer anzeigen">
+                        <div class="f-left">
+                            <div class="f-avatar">{{ item.schuldner__first_name|slice:":1"|upper }}{{ item.schuldner__last_name|slice:":1"|upper }}</div>
+                            <div class="f-details">
+                                <strong>
+                                    {{ item.schuldner__first_name }} {{ item.schuldner__last_name }} 
+                                    {% if item.im_urlaub %}<span title="Aktuell im Urlaub">🌴</span>{% endif %}
+                                    <span style="font-size: 0.8rem; opacity: 0.8;">📱</span>
+                                </strong>
+                                <small>{{ item.datum|date:"d.m.Y" }} ({{ item.anzahl }} Bestellungen)</small>
+
+                                <div id="phone-guthaben-{{ item.schuldner }}-{{ item.datum|date:'Ymd' }}" class="phone-dropdown" style="display: none;" onclick="event.stopPropagation();">
+                                    
+                                    <div class="payment-status" style="margin-bottom: 8px; padding: 6px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-align: center; border: 1px solid transparent; 
+                                        {% if item.zahlungsart == 'TWINT_REQ' %} background: #eff6ff; color: #1e40af; border-color: #bfdbfe;
+                                        {% elif item.zahlungsart == 'TWINT_SEND' %} background: #ecfdf5; color: #065f46; border-color: #a7f3d0;
+                                        {% else %} background: #f8fafc; color: #475569; border-color: #e2e8f0; {% endif %}">
+                                        
+                                        {% if item.zahlungsart == 'TWINT_REQ' %} 📲 TWINT Anfrage geschickt
+                                        {% elif item.zahlungsart == 'TWINT_SEND' %} ✅ Per TWINT erhalten
+                                        {% else %} 📦 Sonstiges {% endif %}
+                                    </div>
+
+                                    {% if item.schuldner__profile__show_phone %}
+                                        {% if item.schuldner__profile__handynummer %}
+                                            <a href="tel:{{ item.schuldner__profile__handynummer }}" style="text-decoration:none; color:#10b981; font-weight:600; display:block; margin-bottom: 5px;">
+                                                📞 {{ item.schuldner__profile__handynummer }}
+                                            </a>                                            
+                                        {% else %}
+                                            <span style="color:#94a3b8; font-style:italic;">Keine Nummer hinterlegt</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span style="color:#ef4444; font-style:italic; font-size: 0.8rem;">🔒 Nummer ist privat</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="f-right">
+                            <span class="f-price positive">{{ item.total_betrag|floatformat:2 }}</span>
+                            
+                            <a href="{% url 'confirm_daily_payments' item.schuldner item.datum|date:'Y-m-d' %}" 
+                               class="btn-check js-confirm" 
+                               title="Betrag für diesen Tag als erhalten markieren"
+                               data-msg="Hat {{ item.schuldner__first_name }} {{ item.schuldner__last_name }} dir die {{ item.total_betrag|floatformat:2 }} CHF vom {{ item.datum|date:'d.m.Y' }} bezahlt?"
+                               data-type="success"
+                               onclick="event.stopPropagation();"> ✔
+                            </a>
+                            
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-text">Niemand schuldet dir etwas.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="finance-card card-red">
+            <div class="finance-header">
+                <span class="icon">💸</span>
+                <div>
+                    <h3>Du schuldest</h3>
+                    <span class="amount negative">-{{ total_schulden|floatformat:2 }} CHF</span>
+                </div>
+            </div>
+            <div class="finance-list">
+                {% for item in schulden_liste %}
+                    <div class="finance-item clickable-row" onclick="togglePhone('phone-schulden-{{ item.glaeubiger }}-{{ item.datum|date:'Ymd' }}')" title="Nummer anzeigen">
+                        <div class="f-left">
+                            <div class="f-avatar">{{ item.glaeubiger__first_name|slice:":1"|upper }}{{ item.glaeubiger__last_name|slice:":1"|upper }}</div>
+                            <div class="f-details">
+                                <strong>
+                                    {{ item.glaeubiger__first_name }} {{ item.glaeubiger__last_name }} 
+                                    {% if item.im_urlaub %}<span title="Aktuell im Urlaub">🌴</span>{% endif %}
+                                    <span style="font-size: 0.8rem; opacity: 0.8;">📱</span>
+                                </strong>
+                                <small>{{ item.datum|date:"d.m.Y" }} ({{ item.anzahl }} Bestellungen)</small>
+
+                                <div id="phone-schulden-{{ item.glaeubiger }}-{{ item.datum|date:'Ymd' }}" class="phone-dropdown" style="display: none;" onclick="event.stopPropagation();">
+                                    
+                                    <div class="payment-status" style="margin-bottom: 8px; padding: 6px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-align: center; border: 1px solid transparent;
+                                        {% if item.zahlungsart == 'TWINT_REQ' %} background: #eff6ff; color: #1e40af; border-color: #bfdbfe;
+                                        {% elif item.zahlungsart == 'TWINT_SEND' %} background: #ecfdf5; color: #065f46; border-color: #a7f3d0;
+                                        {% else %} background: #f8fafc; color: #475569; border-color: #e2e8f0; {% endif %}">
+                                        
+                                        {% if item.zahlungsart == 'TWINT_REQ' %} 📲 TWINT Anfrage erwartet
+                                        {% elif item.zahlungsart == 'TWINT_SEND' %} ✅ Per TWINT bezahlen
+                                        {% else %} 📦 Sonstiges {% endif %}
+                                    </div>
+
+                                    {% if item.glaeubiger__profile__show_phone %}
+                                        {% if item.glaeubiger__profile__handynummer %}
+                                            <a href="tel:{{ item.glaeubiger__profile__handynummer }}" style="text-decoration:none; color:#ef4444; font-weight:600; display:block; margin-bottom: 5px;">
+                                                📞 {{ item.glaeubiger__profile__handynummer }}
+                                            </a>
+                                        {% else %}
+                                            <span style="color:#94a3b8; font-style:italic;">Keine Nummer hinterlegt</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span style="color:#ef4444; font-style:italic; font-size: 0.8rem;">🔒 Nummer ist privat</span>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="f-right">
+                            <span class="f-price negative">{{ item.total_betrag|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-text">Du bist schuldenfrei!</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <h3 class="card-title">⚙️ Einstellungen</h3>
+        
+        <form method="post" class="profile-form">
+            {% csrf_token %}
+            
+            <div class="form-section-title">Allgemein</div>
+
+            <div class="form-group">
+                <label for="{{ u_form.first_name.id_for_label }}">{{ u_form.first_name.label }}</label>
+                <input type="text" 
+                       name="{{ u_form.first_name.name }}" 
+                       id="{{ u_form.first_name.id_for_label }}" 
+                       value="{{ request.user.first_name }}"
+                       class="modern-input">
+            </div>
+
+            <div class="form-group">
+                <label for="{{ u_form.last_name.id_for_label }}">{{ u_form.last_name.label }}</label>
+                <input type="text" 
+                       name="{{ u_form.last_name.name }}" 
+                       id="{{ u_form.last_name.id_for_label }}" 
+                       value="{{ request.user.last_name }}"
+                       class="modern-input">
+            </div>
+
+            <hr class="form-divider">
+
+            <div class="form-section-title">Kontakt</div>
+
+            <div class="form-group">
+                <label>E-Mail Adresse</label>
+                <input type="email" 
+                       value="{{ request.user.email }}"
+                       class="modern-input"
+                       readonly
+                       style="background: #f1f5f9; color: #64748b; cursor: not-allowed;">
+                <small style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px; display: block;">
+                    Die E-Mail wird als Login verwendet und kann hier nicht geändert werden.
+                </small>
+            </div>
+
+            {% for field in p_form %}
+                {% if field.name not in 'notify_daily notify_order_confirm notify_debt show_phone abwesend_bis abwesend_von' %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <input type="text" 
+                               name="{{ field.name }}" 
+                               id="{{ field.id_for_label }}" 
+                               value="{{ field.value|default_if_none:'' }}"
+                               placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                               class="modern-input {% if field.errors %}input-error{% endif %}">
+                        {% if field.errors %}
+                            <div class="field-error">{{ field.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+
+            <hr class="form-divider">
+            <div class="form-section-title">🔔 Privatsphäre & Benachrichtigungen</div>
+            
+            <div class="settings-container">
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <strong>Handynummer für TWINT sichtbar</strong>
+                        <small>Erlaubt es anderen Benutzern, deine Nummer zu sehen.</small>
+                        {% if not request.user.profile.show_phone %}
+                            <small style="color: #f59e0b; font-weight: 600; margin-top: 4px;">
+                                ⚠️ Aktuell privat – bei TWINT-Zahlungen kann die Gruppe dich nicht kontaktieren.
+                            </small>
+                        {% endif %}
+                    </div>
+                    <label class="switch">
+                        {{ p_form.show_phone }}
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <strong>Tägliche Erinnerung</strong>
+                        <small>Erinnert dich um 10:00 Uhr ans Bestellen.</small>
+                    </div>
+                    <label class="switch">
+                        {{ p_form.notify_daily }}
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <strong>Bestell-Bestätigung</strong>
+                        <small>Mail, wenn der Organisator "Bestätigen" drückt.</small>
+                    </div>
+                    <label class="switch">
+                        {{ p_form.notify_order_confirm }}
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <strong>Finanz-Report</strong>
+                        <small>Tägliche Zusammenfassung deiner Bilanz.</small>
+                    </div>
+                    <label class="switch">
+                        {{ p_form.notify_debt }}
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+            </div>
+
+            <hr class="form-divider">
+            <div class="form-section-title">🌴 Abwesenheit planen</div>
+
+            <div class="form-group" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">
+                    In diesem Zeitraum werden keine Benachrichtigungen verschickt.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; display: block; margin-bottom: 5px;">VON:</label>
+                        {{ p_form.abwesend_von }}
+                    </div>
+
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; display: block; margin-bottom: 5px;">BIS (inklusive):</label>
+                        {{ p_form.abwesend_bis }}
+                    </div>
+                </div>
+
+                <button type="button" id="clear-vacation-btn" 
+                        style="width: 100%; background: #f1f5f9; border: 1px solid #cbd5e1; color: #64748b; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s;">
+                    🗑️ Zeitraum leeren
+                </button>
+            </div>
+            <div class="form-actions">
+                <a href="{% url 'password_change' %}" class="btn-password">🔒 Passwort ändern</a>
+                <button type="submit" class="btn-save">Speichern</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="danger-zone">
+        <h3 class="danger-title">Gefahrenzone</h3>
+        <div class="danger-content">
+            <p>Möchtest du deinen Account unwiderruflich löschen? Alle Daten gehen verloren.</p>
+            <a href="{% url 'account_delete' %}" 
+               class="btn-delete-account js-confirm"
+               data-msg="⚠️ ACHTUNG: Bist du sicher? Dein Account, alle Schulden und Guthaben werden SOFORT gelöscht. Dies kann nicht rückgängig gemacht werden!"
+               data-type="danger">
+                Account löschen
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<div id="confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-icon" id="modal-icon-display">⚠️</div>
+        <h3 class="modal-title" id="modal-title-display">Bestätigen</h3>
+        <p id="modal-message" class="modal-text">...</p>
+        <div class="modal-actions">
+            <button id="modal-cancel-btn" class="btn-modal-cancel">Abbrechen</button>
+            <a id="modal-confirm-btn" href="#" class="btn-modal-confirm">Ja, fortfahren</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* --- STYLES FÜR KLICKBARE ZEILE --- */
+    .clickable-row {
+        cursor: pointer;
+        padding: 12px 10px !important;
+        border-radius: 10px;
+        transition: background-color 0.2s ease, transform 0.1s ease;
+        border-bottom: 1px solid transparent !important;
+    }
+    
+    .clickable-row:hover {
+        background-color: #f8fafc;
+    }
+    
+    .clickable-row:active {
+        transform: scale(0.98);
+        background-color: #f1f5f9;
+    }
+
+    .phone-dropdown {
+        margin-top: 8px;
+        font-size: 0.85rem;
+        background: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        animation: fadeIn 0.2s ease-out;
+        display: inline-block;
+    }
+
+    /* --- DEIN RESTLICHES DESIGN --- */
+    .profile-wrapper { max-width: 800px; margin: 0 auto; padding-top: 20px; padding-bottom: 60px; }
+    .profile-header { text-align: center; margin-bottom: 30px; animation: fadeIn 0.5s ease-out; }
+    .avatar-large { width: 100px; height: 100px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: 700; margin: 0 auto 15px auto; box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3); border: 4px solid white; }
+    .username-title { color: #1e293b; margin: 0; font-size: 2rem; }
+    .user-meta { color: #64748b; margin-top: 5px; }
+
+    .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; animation: slideUp 0.4s ease-out; }
+    .finance-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); display: flex; flex-direction: column; max-height: 400px; }
+    .card-green { border-top: 4px solid #10b981; }
+    .card-red { border-top: 4px solid #ef4444; }
+
+    .finance-header { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 15px; }
+    .finance-header .icon { font-size: 2rem; }
+    .finance-header h3 { margin: 0; font-size: 0.9rem; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+    .amount { font-size: 1.4rem; font-weight: 700; }
+    .positive { color: #10b981; }
+    .negative { color: #ef4444; }
+
+    .finance-list { 
+        overflow-y: auto; 
+        overflow-x: hidden; 
+        flex-grow: 1; 
+        padding-right: 5px; 
+    }
+    .finance-item { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f8fafc; font-size: 0.9rem; }
+    .finance-item:last-child { border-bottom: none; }
+    
+    .f-left { display: flex; align-items: flex-start; gap: 10px; }
+    .f-right { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+    .f-avatar { width: 32px; height: 32px; background: #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #475569; flex-shrink: 0; }
+    .f-details { display: flex; flex-direction: column; }
+    .f-details small { color: #94a3b8; font-size: 0.75rem; }
+    .f-price { font-weight: 600; }
+    
+    .btn-check { 
+        background: #dcfce7; color: #166534; width: 28px; height: 28px; border-radius: 50%; 
+        display: flex; align-items: center; justify-content: center; text-decoration: none; 
+        font-size: 0.9rem; border: 1px solid #86efac; transition: all 0.2s; cursor: pointer;
+    }
+    .btn-check:hover { background: #166534; color: white; transform: scale(1.1); }
+    .empty-text { color: #cbd5e1; text-align: center; font-style: italic; margin-top: 20px; }
+
+    .profile-card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05); border: 1px solid rgba(255,255,255,0.8); animation: slideUp 0.5s ease-out; }
+    .card-title { margin-top: 0; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; }
+    .form-section-title { font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 15px; letter-spacing: 0.5px; }
+    .form-divider { border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; color: #64748b; font-weight: 500; font-size: 0.9rem; }
+    
+    .modern-input { width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; font-family: 'Poppins', sans-serif; box-sizing: border-box; transition: border-color 0.2s; color: #334155; }
+    .modern-input:focus { border-color: #3b82f6; outline: none; }
+    .input-error { border-color: #ef4444; background-color: #fef2f2; }
+    .field-error { color: #ef4444; font-size: 0.85rem; margin-top: 5px; }
+
+    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; flex-wrap: wrap; gap: 15px; }
+    .btn-save { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
+    .btn-save:hover { transform: translateY(-2px); }
+    .btn-password { color: #3b4759; text-decoration: none; font-size: 0.9rem; padding: 10px 15px; background: #f8fafc; border-radius: 8px; transition: all 0.2s; }
+    .btn-password:hover { background: #f1f5f9; color: #334155; }
+
+    .settings-container { background: #f8fafc; border-radius: 12px; padding: 5px 15px; border: 1px solid #f1f5f9; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #e2e8f0; }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-label { display: flex; flex-direction: column; }
+    .setting-label strong { color: #334155; font-size: 0.95rem; margin-bottom: 2px; }
+    .setting-label small { color: #94a3b8; font-size: 0.8rem; }
+    .switch { position: relative; display: inline-block; width: 50px; height: 26px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .slider.round { border-radius: 34px; }
+    .slider.round:before { border-radius: 50%; }
+    input:checked + .slider { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    .danger-zone { margin-top: 40px; padding: 25px; border: 1px dashed #fca5a5; background: rgba(254, 226, 226, 0.5); border-radius: 16px; }
+    .danger-title { color: #ef4444; margin-top: 0; font-size: 1.1rem; }
+    .danger-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+    .danger-content p { color: #64748b; font-size: 0.9rem; margin: 0; max-width: 70%; }
+    .btn-delete-account { 
+        background-color: #fef2f2; color: #ef4444; border: 1px solid #fca5a5; 
+        padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; 
+        font-size: 0.9rem; transition: all 0.2s; 
+    }
+    .btn-delete-account:hover { background-color: #fee2e2; border-color: #ef4444; }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(5px); z-index: 2000; display: none; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
+    .modal-card { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: scaleUp 0.2s ease-out; }
+    .modal-icon { font-size: 3rem; margin-bottom: 15px; }
+    .modal-title { margin: 0 0 10px 0; color: #1e293b; font-size: 1.5rem; }
+    .modal-text { color: #64748b; margin-bottom: 25px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 15px; justify-content: center; }
+    .btn-modal-cancel { padding: 10px 20px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-modal-cancel:hover { background: #e2e8f0; color: #334155; }
+    .btn-modal-confirm { padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3); transition: all 0.2s; }
+    .btn-modal-confirm:hover { transform: translateY(-2px); box-shadow: 0 6px 10px rgba(16, 185, 129, 0.4); }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    @media (max-width: 700px) {
+        .profile-grid { grid-template-columns: 1fr; }
+        .form-actions { flex-direction: column-reverse; }
+        .btn-save, .btn-password { width: 100%; text-align: center; }
+        .danger-content { flex-direction: column; align-items: flex-start; }
+        .danger-content p { max-width: 100%; margin-bottom: 10px; }
+        .btn-delete-account { width: 100%; text-align: center; }
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const vonInput = document.getElementById('id_abwesend_von');
+        const bisInput = document.getElementById('id_abwesend_bis');
+        const clearBtn = document.getElementById('clear-vacation-btn');
+
+        if (vonInput && bisInput) {
+            // Logik für die dynamische Sperre (wie bisher)
+            vonInput.addEventListener('change', function() {
+                if (this.value) {
+                    bisInput.min = this.value;
+                    if (bisInput.value && bisInput.value < this.value) {
+                        bisInput.value = '';
+                    }
+                }
+            });
+
+            // Logik für den zentralen Lösch-Button
+            clearBtn.addEventListener('click', function() {
+                vonInput.value = '';
+                bisInput.value = '';
+                // Wichtig: Das Minimum des Enddatums wieder auf "heute" zurücksetzen
+                // Wir nutzen hier das initiale 'min' Attribut, das Django gesetzt hat
+                bisInput.min = vonInput.getAttribute('min');
+            });
+        }
+    });
+</script>
+{% endblock %}

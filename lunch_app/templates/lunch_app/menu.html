@@ -1,54 +1,561 @@
 {% extends 'lunch_app/base.html' %}
+{% load static %}
+{% load l10n %} 
 
 {% block content %}
-<h2>Menü: {{ restaurant.name }}</h2>
-<div style="margin-bottom: 20px;">
-  <a href="{% url 'home' %}" 
-     style="display: inline-block; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 6px; font-family: sans-serif; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-     ← Zurück zur Auswahl
-  </a>
+
+<input type="hidden" id="mindestwert-val" value="{{ mindestwert|stringformat:'f' }}">
+<input type="hidden" id="total-others-val" value="{{ total_others|stringformat:'f' }}">
+
+{% block extra_js %}
+<script src="{% static 'js/menu_logic.js' %}"></script>
+{% endblock %}
+
+<div class="menu-header">
+    <a href="{% url 'restaurant_liste' alte_art %}" class="btn-back">
+        ← Zurück zur Liste
+    </a>
+    
+    <div class="header-info-wrapper">
+        <h2 class="restaurant-title">{{ restaurant.name }}</h2>
+        
+        {% if restaurant.website %}
+            <a href="{{ restaurant.website }}" target="_blank" class="btn-website-header" title="Zur Webseite/Speisekarte">
+                🌐 <span class="desktop-only">Webseite</span>
+            </a>
+        {% endif %}
+    </div>
 </div>
 
-{% if ist_zu_spaet %}
-    <div class="alert" style="background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
-        <strong>Bestellschluss vorbei!</strong><br>
-        Es ist nach 11:00 Uhr. Bestellungen sind für heute nicht mehr möglich.
-    </div>
-{% else %}
-    <form action="{% url 'bestellen_abschliessen' %}" method="post">
-        {% csrf_token %}
+{% if existing_order_art and existing_order_art != alte_art %}
+
+    <div class="error-container border-warning">
+        <div class="error-icon">✋</div>
+        <h2 class="error-title" style="color: #f59e0b;">Bereits bestellt</h2>
+        <p class="error-text">
+            Du hast heute bereits eine Bestellung für <strong>
+            {% if existing_order_art == 'LOKAL' %}Im Restaurant (Lokal){% elif existing_order_art == 'TAKEAWAY' %}Take-Away{% else %}Lieferung{% endif %}
+            </strong> aufgegeben.
+            <br><br>
+            Du kannst nicht gleichzeitig <em>{{ existing_order_art }}</em> und <em>{{ alte_art }}</em> bestellen.
+        </p>
         
-        <div class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">Auswahl</th>
-                        <th>Gericht</th>
-                        <th>Preis</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for gericht in restaurant.gerichte.all %}
-                    <tr>
-                        <td>
-                            <input type="checkbox" name="gerichte" value="{{ gericht.id }}" id="gericht_{{ gericht.id }}" style="transform: scale(1.5);">
-                        </td>
-                        <td>
-                            <label for="gericht_{{ gericht.id }}" style="cursor: pointer; display: block;">
-                                {{ gericht.name }}
-                            </label>
-                        </td>
-                        <td>{{ gericht.preis }} CHF</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="error-actions">
+            <a href="{% url 'uebersicht' %}" class="btn-submit" style="background: #3b82f6; text-decoration: none;">
+                Zur Übersicht
+            </a>
+            <a href="{% url 'eigene_stornieren' %}" 
+               class="btn-submit js-confirm" 
+               data-msg="Möchtest du deine bestehende Bestellung wirklich stornieren, um hier neu zu bestellen?" 
+               style="background: #ef4444; text-decoration: none;">
+                Alte Bestellung stornieren
+            </a>
+        </div>
+    </div>
+
+{% else %}
+
+    {% if ist_zu_spaet %}
+        <div class="alert-box alert-error">
+            <strong>Bestellschluss erreicht.</strong> Nach 11:00 Uhr können keine Bestellungen mehr entgegengenommen werden.
+        </div>
+    {% else %}
+        
+        {% if mindestwert > 0 %}
+        <div id="main-progress-card" class="menu-card progress-card">
+            <div class="progress-info">
+                <span class="progress-label">Fortschritt</span>
+                <div class="progress-values">
+                    <strong id="display-total">{{ current_total|floatformat:2 }}</strong> 
+                    <span class="text-muted">/ {{ mindestwert|floatformat:2 }} CHF</span>
+                </div>
+            </div>
+            <div class="progress-track">
+                <div id="progress-bar" class="progress-fill" style="
+                    width: {{ progress_percent|stringformat:'d' }}%; 
+                    background: {% if goal_reached %}#10b981{% else %}#f59e0b{% endif %};">
+                </div>
+            </div>
+            <div class="progress-status">
+                <span id="display-percent" class="percent-badge">{{ progress_percent|floatformat:0 }}%</span>
+                <p id="status-text" class="status-msg" style="color: {% if goal_reached %}#10b981{% else %}#64748b{% endif %};">
+                    {% if goal_reached %}
+                        ✅ Mindestbestellwert erreicht!
+                    {% else %}
+                        Es fehlen noch <strong>{{ missing_amount|floatformat:2 }} CHF</strong>
+                    {% endif %}
+                </p>
+            </div>
         </div>
 
-        <div style="margin-top: 20px; text-align: right;">
-            <button type="submit" class="btn" style="font-size: 1.2rem;">Bestellen</button>
+        <div id="sticky-top-progress" class="sticky-top-bar">
+            <div class="sticky-top-content">
+                <div class="sticky-top-info">
+                    <span id="sticky-top-status-text" style="font-size: 0.85rem; font-weight: 600;">Lade...</span>
+                    <span id="sticky-top-values" style="font-size: 0.85rem; color: #64748b;">0 / 0 CHF</span>
+                </div>
+                <div class="sticky-progress-track">
+                    <div id="sticky-progress-fill" class="progress-fill" style="width: 0%;"></div>
+                </div>
+            </div>
         </div>
-    </form>
+        {% endif %}
+        
+        <form id="order-form" method="post" action="{% url 'bestellen_abschliessen' %}">
+        {% csrf_token %}
+        {% if alte_art == 'LOKAL' %}
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 15px 20px; margin-bottom: 20px; color: #1e40af; font-size: 0.95rem;">
+            ℹ️ <strong>Info:</strong> Bei Lokal musst du kein Gericht vorauswählen. Klicke einfach auf <strong>"Ich bin dabei"</strong> um dich anzumelden. Die Speisekarte dient nur zur Information.
+        </div>
+        {% endif %}
+        <input type="hidden" name="restaurant_id" value="{{ restaurant.id }}">
+
+        <div class="menu-card" style="margin-bottom: 100px;">
+            
+            <div class="search-bar-container">
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="menu-search" class="modern-input" placeholder="Gericht oder Kategorie suchen...">
+                </div>
+                <button type="button" id="fav-filter-btn" class="btn-filter-fav">
+                    <span>❤️</span> <span class="fav-text">Favoriten</span>
+                </button>
+            </div>
+
+            {% regroup gerichte_liste|dictsort:"reihenfolge" by kategorie as menu_liste %}
+
+            <div class="table-responsive">
+                <table id="menu-table" class="modern-table {% if alte_art == 'LOKAL' %}lokal-mode{% endif %}">
+                    {% for kategorie_gruppe in menu_liste %}
+                        {% if kategorie_gruppe.grouper != "Intern" %}
+                            <tr class="category-row">
+                                <td colspan="4" class="category-header">{{ kategorie_gruppe.grouper }}</td>
+                            </tr>
+                            {% for gericht in kategorie_gruppe.list %}
+                            
+                            {% with has_opts=gericht.option_groups.all|length %}
+                            
+                            <tr class="dish-row selectable-row" 
+                                data-is-fav="{% if gericht.id in favoriten_ids %}true{% else %}false{% endif %}"
+                                data-category="{{ kategorie_gruppe.grouper }}"
+                                data-id="{{ gericht.id }}"
+                                data-has-options="{% if has_opts > 0 %}true{% else %}false{% endif %}"> 
+                                
+                                <td class="col-checkbox">
+                                    <div class="checkbox-wrapper">
+                                        <input type="checkbox" class="gericht-checkbox" 
+                                               id="cb_{{ gericht.id }}"
+                                               name="gerichte" value="{{ gericht.id }}" 
+                                               data-price="{{ gericht.preis|unlocalize }}" 
+                                               {% if gericht.id in bereits_bestellt_ids %}checked{% endif %}
+                                               {% if has_opts > 0 %}onclick="return false;"{% endif %}>
+                                    </div>
+                                </td>
+
+                                <td class="dish-name">
+                                    <div class="dish-content">
+                                        <div class="dish-top-row">
+                                            <span class="dish-text">{{ gericht.name }}</span>
+                                            <span class="mobile-price">{{ gericht.preis }} CHF</span>
+                                        </div>
+                                        
+                                        {% if has_opts > 0 %}
+                                            <span class="badge-config">Anpassen</span>
+                                        {% endif %}
+                                        
+                                        {% if social_proof %}
+                                            {% for id, users in social_proof.items %}
+                                                {% if id == gericht.id %}
+                                                    <div class="social-badges">
+                                                    {% for user_kuerzel in users %}
+                                                        <span class="avatar-badge" title="Jemand hat das bestellt!">{{ user_kuerzel }}</span>
+                                                    {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+
+                                        {% if has_opts > 0 %}
+                                        <div id="options-data-{{ gericht.id }}" style="display:none;">
+                                            <div class="modal-header-custom">
+                                                <h3 class="modal-dish-title">{{ gericht.name }} anpassen</h3>
+                                                <p class="modal-subtitle">Stelle dein Gericht zusammen:</p>
+                                            </div>
+                                            <div class="modal-steps">
+                                            {% for group in gericht.option_groups.all %}
+                                                <div class="step-card">
+                                                    <div class="step-header">
+                                                        <span class="step-number">{{ forloop.counter }}</span>
+                                                        <span class="step-title">{{ group.name }} {% if group.pflicht %}<span class="req-star">*</span>{% endif %}</span>
+                                                    </div>
+                                                    <div class="step-options {% if group.typ == 'NUMBER' %}layout-list{% else %}layout-radio-list{% endif %}">
+                                                        {% for item in group.items.all %}
+                                                            {% if group.typ == 'RADIO' %}
+                                                                <label class="radio-list-item">
+                                                                    <input type="radio" name="group_{{ group.id }}" value="{{ item.id }}" data-price="{{ item.aufpreis|unlocalize }}" {% if group.pflicht and forloop.first %}required{% endif %}>
+                                                                    <div class="radio-content">
+                                                                        <span class="opt-name">{{ item.get_name }}</span>
+                                                                        {% if item.aufpreis > 0 %}<span class="opt-price">+{{ item.aufpreis }}</span>{% endif %}
+                                                                    </div>
+                                                                    <div class="radio-indicator"></div>
+                                                                </label>
+                                                            {% elif group.typ == 'CHECKBOX' %}
+                                                                <div class="layout-chips">
+                                                                    <label class="option-chip">
+                                                                        <input type="checkbox" name="group_{{ group.id }}" value="{{ item.id }}" data-price="{{ item.aufpreis|unlocalize }}">
+                                                                        <span class="chip-text">{{ item.get_name }}</span>
+                                                                        {% if item.aufpreis > 0 %}<span class="chip-price">+{{ item.aufpreis }}</span>{% endif %}
+                                                                    </label>
+                                                                </div>
+                                                            {% elif group.typ == 'NUMBER' %}
+                                                                <div class="number-row">
+                                                                    <div class="number-info">
+                                                                        <span class="opt-name-bold">{{ item.get_name }}</span>
+                                                                        {% if item.aufpreis > 0 %}<span class="opt-price-small">+{{ item.aufpreis }} CHF</span>{% endif %}
+                                                                    </div>
+                                                                    <div class="number-controls">
+                                                                        <button type="button" class="btn-minus" onclick="updateQty(this, -1)">-</button>
+                                                                        <input type="number" name="qty_{{ item.id }}" value="0" min="0" max="15" readonly data-price="{{ item.aufpreis|unlocalize }}">
+                                                                        <button type="button" class="btn-plus" onclick="updateQty(this, 1)">+</button>
+                                                                    </div>
+                                                                </div>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+
+                                        <div class="note-container" style="{% if gericht.id not in bereits_bestellt_ids %}display:none;{% endif %} margin-top: 8px;">
+                                            <input type="text" name="notiz_{{ gericht.id }}" placeholder="📝 Sonderwunsch? (z.B. ohne Zwiebeln)" class="modern-input-small" value="{{ gericht.saved_note|default_if_none:'' }}" onclick="event.stopPropagation();">
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <td class="col-price desktop-price">{{ gericht.preis }} CHF</td>
+                                
+                                <td class="col-fav">
+                                    <span class="fav-icon" data-id="{{ gericht.id }}" data-url="{% url 'toggle_favorit' gericht.id %}">
+                                        {% if gericht.id in favoriten_ids %}❤️{% else %}🤍{% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endwith %}
+                            {% endfor %}
+                        {% endif %}
+                        {% if alte_art == 'LOKAL' %}
+                        <form method="post" action="{% url 'bestellen_abschliessen' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="restaurant_id" value="{{ restaurant.id }}">
+                            <input type="hidden" name="art" value="LOKAL">
+                            <button type="submit" style="
+                                width: 100%;
+                                padding: 16px;
+                                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                color: white;
+                                border: none;
+                                border-radius: 12px;
+                                font-size: 1.1rem;
+                                font-weight: 700;
+                                cursor: pointer;
+                                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                                margin-bottom: 20px;
+                            ">✋ Ich bin dabei</button>
+                        </form>
+                        {% endif %}
+                    {% endfor %}
+                    <tr id="no-results-message" style="display: none;">
+                        <td colspan="4" class="empty-state">Nichts gefunden.</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+       
+
+        <div id="sticky-order-bar" class="sticky-bar">
+            <div class="sticky-content">
+                <div class="sticky-info">
+                    <span class="sticky-label">Summe:</span>
+                    <span id="sticky-total" class="sticky-price">0.00 CHF</span>
+                </div>          
+
+                <div class="sticky-actions">
+                    {% if bereits_bestellt_ids %}
+                        <a href="{% url 'eigene_stornieren' %}" 
+                           class="btn-sticky-cancel js-confirm"
+                           data-msg="Bestellung stornieren?">
+                           <span class="desktop-text">Stornieren</span>
+                           <span class="mobile-text">❌</span>
+                        </a>
+                    {% endif %}
+                    
+                    <button type="button" id="sticky-submit-btn" class="btn-sticky-submit">
+                        {% if alte_art == 'LOKAL' %}✋ Ich bin dabei{% else %}Bestellen 🚀{% endif %}
+                    </button>
+                </div>
+            </div>
+            
+            <input type="hidden" name="art" id="hidden-art-input" value="{{ alte_art }}">
+        </div>
+
+        </form>
+    {% endif %}
+
+    <div id="option-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div id="modal-content-placeholder"></div>
+            <div class="modal-actions">
+                <button type="button" id="btn-cancel-options" class="btn-modal-cancel">Abbrechen</button>
+                <button type="button" id="btn-save-options" class="btn-modal-confirm">Übernehmen</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="confirm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 400px; text-align: center; padding: 30px;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+            <h3 style="margin-bottom: 10px; color: #1e293b;">Bist du sicher?</h3>
+            <p id="modal-message" style="color: #64748b; margin-bottom: 25px;">...</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="modal-cancel-btn" class="btn-modal-cancel">Abbrechen</button>
+                <a id="modal-confirm-btn" href="#" class="btn-modal-confirm" style="background: #ef4444; color: white; text-decoration: none;">Ja, fortfahren</a>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .lokal-mode .col-checkbox,
+        .lokal-mode .col-price,
+        .lokal-mode .desktop-price,
+        .lokal-mode .mobile-price,
+        .lokal-mode .note-container,
+        .lokal-mode .badge-config {
+            display: none !important;
+        }
+        .lokal-mode .selectable-row {
+            cursor: default;
+            pointer-events: none;
+        }
+        /* Bestehende Styles */
+        .error-container { background: white; border-radius: 16px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-top: 40px; border-top: 4px solid #f1f5f9; }
+        .border-error { border-top-color: #ef4444; }
+        .border-warning { border-top-color: #f59e0b; }
+        .error-icon { font-size: 4rem; margin-bottom: 20px; }
+        .error-title { font-size: 1.8rem; margin-bottom: 10px; font-weight: 700; }
+        .error-text { color: #64748b; font-size: 1.1rem; line-height: 1.6; }
+        .error-actions { margin-top: 30px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 2000; display: none; justify-content: center; align-items: center; animation: fadeIn 0.2s; padding: 10px; box-sizing: border-box; }
+        .modal-card { background: #f8fafc; padding: 0; border-radius: 20px; width: 100%; max-width: 550px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; }
+        .modal-header-custom { background: white; padding: 20px 25px; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10; }
+        .modal-dish-title { margin: 0; color: #1e293b; font-size: 1.3rem; }
+        .modal-subtitle { margin: 5px 0 0 0; color: #64748b; font-size: 0.9rem; }
+        .modal-steps { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .step-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .step-number { background: #3b82f6; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+        .step-title { font-weight: 600; color: #334155; font-size: 1rem; }
+        .req-star { color: #ef4444; margin-left: 2px; }
+        .layout-radio-list { display: flex; flex-direction: column; }
+        .radio-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.1s; border-radius: 6px; }
+        .radio-list-item:last-child { border-bottom: none; }
+        .radio-list-item:hover { background: #f8fafc; }
+        .radio-list-item input { display: none; }
+        .radio-content { flex-grow: 1; }
+        .radio-indicator { width: 18px; height: 18px; border: 2px solid #cbd5e1; border-radius: 50%; position: relative; transition: all 0.2s; flex-shrink: 0; }
+        .radio-list-item input:checked ~ .radio-indicator { border-color: #3b82f6; background: #3b82f6; box-shadow: inset 0 0 0 3px white; }
+        .radio-list-item input:checked ~ .radio-content { color: #2563eb; font-weight: 600; }
+        .layout-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .option-chip { cursor: pointer; position: relative; }
+        .option-chip input { display: none; }
+        .chip-text { display: inline-block; padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 0.9rem; color: #475569; background: white; transition: all 0.2s; user-select: none; }
+        .chip-price { font-size: 0.75rem; margin-left: 4px; color: #94a3b8; font-weight: 600; }
+        .option-chip input:checked + .chip-text { background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 5px rgba(59, 130, 246, 0.3); }
+        .option-chip input:checked + .chip-text .chip-price { color: #dbeafe; }
+        .layout-list { display: flex; flex-direction: column; gap: 10px; }
+        .number-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .opt-name-bold { font-weight: 600; color: #334155; font-size: 0.9rem; }
+        .opt-price-small { font-size: 0.8rem; color: #64748b; margin-left: 5px; }
+        .number-controls { display: flex; align-items: center; gap: 5px; }
+        .number-controls input { width: 40px; text-align: center; border: none; font-weight: 700; font-size: 1rem; color: #1e293b; background: transparent; }
+        .btn-minus, .btn-plus { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #cbd5e1; background: white; cursor: pointer; font-weight: 700; color: #334155; display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+        .btn-minus:active, .btn-plus:active { transform: scale(0.95); }
+        .btn-plus { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+        .opt-name { font-size: 0.9rem; display: block; line-height: 1.3; }
+        .opt-price { font-size: 0.8rem; color: #64748b; margin-top: 4px; display: block; }
+        .modal-actions { background: white; padding: 15px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; z-index: 10; }
+        .btn-modal-confirm { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; flex-grow: 1; }
+        .btn-modal-cancel { background: #f1f5f9; color: #64748b; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; flex-grow: 1; }
+        .badge-config { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; font-size: 0.7rem; padding: 3px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; margin-left: 8px; vertical-align: middle; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
+        .btn-website-header { background-color: #f0f9ff; color: #0284c7; text-decoration: none; border: 1px solid #bae6fd; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; gap: 5px; }
+        .btn-website-header:hover { background-color: #0284c7; color: white; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(2, 132, 199, 0.2); }
+        .menu-header { display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }
+        .header-info-wrapper { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .btn-back { display: inline-block; align-self: flex-start; padding: 8px 16px; background-color: white; color: #64748b; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 0.9rem; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s; }
+        .btn-back:hover { background-color: #f8fafc; color: #334155; transform: translateX(-2px); }
+        .restaurant-title { font-size: 2rem; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.2; }
+        .menu-card { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); padding: 25px; border: 1px solid rgba(255,255,255,0.5); }
+        .alert-box { padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; }
+        .alert-error { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .progress-info { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+        .progress-label { font-size: 0.9rem; color: #64748b; font-weight: 500; }
+        .progress-values { font-size: 1.2rem; color: #1e293b; }
+        .text-muted { color: #94a3b8; font-size: 0.9rem; font-weight: 400; }
+        .progress-track { background: #f1f5f9; height: 14px; border-radius: 7px; overflow: hidden; margin-bottom: 12px; }
+        .progress-fill { height: 100%; transition: width 0.5s ease-out, background-color 0.3s; }
+        .progress-status { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+        .percent-badge { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.8rem; }
+        .status-msg { margin: 0; font-weight: 500; }
+        .sticky-top-bar { 
+            position: fixed; 
+            top: 70px; /* Ggf. anpassen, falls deine Navbar höher ist */
+            left: 0; 
+            width: 100%; 
+            background: rgba(255, 255, 255, 0.95); 
+            backdrop-filter: blur(10px); 
+            border-bottom: 1px solid rgba(0,0,0,0.05); 
+            padding: 10px 5%; 
+            box-sizing: border-box; 
+            z-index: 800; 
+            transform: translateY(-100%); /* Standardmäßig versteckt */
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
+        }
+
+        /* --- HIER WAR DER FEHLER: DIESE KLASSE FEHLTE --- */
+        .sticky-top-bar.visible {
+            transform: translateY(0); /* Fährt herunter */
+        }
+                .sticky-progress-track {
+            background: #f1f5f9;      /* Hellgrauer Hintergrund */
+            height: 8px;              /* Etwas dünner als der Hauptbalken */
+            border-radius: 4px;       /* Abgerundete Ecken */
+            overflow: hidden;         /* Wichtig, damit der Füll-Balken nicht überläuft */
+            width: 100%;              /* Volle Breite */
+            margin-top: 5px;          /* Abstand zum Text */
+        }
+
+        /* 2. Der Füll-Balken selbst */
+        /* Wir nutzen hier dieselbe Klasse wie unten (.progress-fill), 
+           aber wir müssen sicherstellen, dass sie auch hier greift */
+        .sticky-top-bar .progress-fill {
+            height: 100%;             /* Füllt die Höhe des Tracks aus */
+            transition: width 0.5s ease-out, background-color 0.3s;
+        }
+
+        /* 3. Layout Anpassung für den Text oben */
+        .sticky-top-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 2px;
+        }
+        .search-bar-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
+        .search-wrapper { flex-grow: 1; position: relative; }
+        .search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; }
+        .modern-input { width: 100%; padding: 12px 12px 12px 45px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; outline: none; box-sizing: border-box; transition: border-color 0.2s; font-family: 'Poppins', sans-serif; }
+        .modern-input:focus { border-color: #38bdf8; }
+        .btn-filter-fav { padding: 0 20px; border: 2px solid #e2e8f0; background: white; color: #64748b; border-radius: 10px; cursor: pointer; font-family: 'Poppins', sans-serif; font-weight: 500; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .btn-filter-fav:hover { background: #f8fafc; border-color: #cbd5e1; }
+        .table-responsive { overflow-x: auto; }
+        .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .category-row td { padding: 25px 0 10px 0; color: #1e293b; font-size: 1.1rem; font-weight: 700; border-bottom: 2px solid #f1f5f9; }
+        .dish-row { transition: background-color 0.1s; }
+        .selectable-row { cursor: pointer; }
+        .selectable-row:hover { background-color: #f8fafc !important; }
+        .dish-row td { padding: 15px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .col-checkbox { width: 40px; text-align: center; vertical-align: top; padding-top: 18px !important; }
+        .col-price { text-align: right; white-space: nowrap; font-weight: 500; color: #334155; }
+        .col-fav { width: 40px; text-align: center; vertical-align: top; padding-top: 18px !important; }
+        .gericht-checkbox { transform: scale(1.3); cursor: pointer; accent-color: #10b981; }
+        .dish-text { font-weight: 500; color: #475569; transition: color 0.2s; line-height: 1.5; display: block; }
+        .social-badges { display: inline-flex; gap: 4px; margin-left: 0; margin-top: 5px; vertical-align: middle; flex-wrap: wrap; }
+        .avatar-badge { background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 6px; font-weight: 700; min-width: 18px; text-align: center; box-shadow: 0 2px 4px rgba(56, 189, 248, 0.3); }
+        .fav-icon { font-size: 1.3rem; transition: transform 0.2s; display: inline-block; padding: 5px; cursor: pointer; }
+        .fav-icon:hover { transform: scale(1.2); }
+        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+        .modern-input-small { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; box-sizing: border-box; transition: border-color 0.2s; font-family: 'Poppins', sans-serif; background: #f8fafc; }
+        .modern-input-small:focus { border-color: #38bdf8; background: white; }
+        .mobile-price { display: none; }
+        .dish-top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; }
+
+        /* NEUE STYLES FÜR BUTTONS UNTEN */
+        .footer-buttons { display: flex; gap: 15px; flex-wrap: wrap; }
+        
+        /* Submit Button nimmt mehr Platz ein */
+        .btn-submit { flex: 2; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4); }
+        
+        /* Cancel Button kleiner und rot */
+        .btn-cancel { flex: 1; background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; padding: 16px; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .btn-cancel:hover { background: #fee2e2; border-color: #ef4444; }
+
+        /* STICKY BAR ACTIONS */
+        .sticky-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: white; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); padding: 20px 20px; box-sizing: border-box; z-index: 900; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-top: 1px solid rgba(0,0,0,0.05); scale: 1.1;}
+        .sticky-bar.visible { transform: translateY(0); }
+        .sticky-content { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+        .sticky-info { display: flex; flex-direction: column; min-width: 80px; }
+        .sticky-label { font-size: 0.75rem; color: #64748b; font-weight: 500; text-transform: uppercase; }
+        .sticky-price { font-size: 1.2rem; font-weight: 700; color: #1e293b; }
+        
+        .sticky-actions { display: flex; gap: 10px; align-items: center; }
+        
+        .btn-sticky-submit { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 12px 25px; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); transition: transform 0.2s; white-space: nowrap; }
+        .btn-sticky-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4); }
+        
+        .btn-sticky-cancel { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; padding: 12px 15px; border-radius: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .btn-sticky-cancel:hover { background: #fee2e2; }
+        
+        /* Responsive Text für Sticky Cancel */
+        .desktop-text { display: inline; }
+        .mobile-text { display: none; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        /* --- MOBILE STYLES (WICHTIG!) --- */
+        @media (max-width: 600px) {
+            .menu-header { margin-bottom: 20px; }
+            .restaurant-title { font-size: 1.6rem; }
+            .desktop-only { display: none; }
+            .btn-website-header { padding: 6px 10px; }
+            .menu-card { padding: 15px; border-radius: 12px; }
+            .progress-values { font-size: 1rem; }
+            .progress-info { align-items: center; }
+            .gericht-checkbox { transform: scale(1.5); margin-top: 5px; }
+            .desktop-price { display: none; }
+            .mobile-price { display: block; font-weight: 700; color: #334155; white-space: nowrap; }
+            .dish-row td { padding: 12px 5px; }
+            .col-checkbox { width: 30px; padding-left: 0; }
+            .col-fav { width: 30px; padding-right: 0; }
+            .dish-text { font-size: 0.95rem; }
+            
+            /* Sticky Bar Mobil */
+            .sticky-bar { padding: 15px 15px; }
+            .sticky-price { font-size: 1.1rem; }
+            .btn-sticky-submit { padding: 10px 20px; font-size: 0.9rem; }
+            
+            /* Buttons Anpassung Mobil */
+            .footer-buttons { flex-direction: column-reverse; } /* Stornieren unter Speichern */
+            .btn-cancel { width: 100%; text-align: center; }
+            
+            /* Sticky Cancel Button Mobil (Nur X) */
+            .desktop-text { display: none; }
+            .mobile-text { display: inline; font-size: 1.2rem; }
+            .btn-sticky-cancel { padding: 10px 15px; }
+
+            .modal-card { max-height: 95vh; width: 100%; border-radius: 15px 15px 0 0; position: absolute; bottom: 0; }
+            .modal-overlay { align-items: flex-end; padding: 0; }
+            .modal-actions { padding-bottom: 30px; /* Safe Area iOS */ }
+            .step-card { padding: 15px; }
+            .search-bar-container { gap: 10px; }
+            .btn-filter-fav { padding: 0 12px; }
+            .fav-text { display: none; } /* Text "Favoriten" weg, nur Herz */
+        }
+    </style>
+
 {% endif %}
 
 {% endblock %}

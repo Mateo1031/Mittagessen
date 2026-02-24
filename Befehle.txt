@@ -1,0 +1,71 @@
+Seite starten:
+
+start-lunch
+
+
+Änderung speichern:
+
+docker compose up -d --build
+
+docker exec lunch_app python manage.py collectstatic --clear --noinput
+
+docker restart lunch_nginx
+
+docker restart lunch_wecker
+
+docker restart lunch_app
+
+
+
+Logs anzeigen:
+
+docker logs lunch_app --tail 30
+
+
+Datenbank migrieren:
+
+
+docker exec -it lunch_app python manage.py makemigrations
+
+docker exec -it lunch_app python manage.py migrate
+
+
+Die requirements.txt erstellen:
+
+# Falls noch nicht aktiviert: source myenv/bin/activate
+pip freeze > requirements.txt
+
+python3 -m venv myenv (Baut das leere "Zimmer")
+
+source myenv/bin/activate (Betritt das Zimmer)
+
+pip install -r requirements.txt (Kauft alle Möbel/Pakete neu)
+
+
+
+
+Die ZIP-Datei erstellen:
+
+cd /home/mateo/mittagessen/
+
+zip -r lunch_app_backup.zip . -x "myenv/*" "*.pyc" "__pycache__/*" ".git/*"
+
+
+
+
+Der Cronjob für die 10:00 Uhr Erinnerung:
+
+crontab -e
+
+00 10 * * 1-5 /home/mateo/mittagessen/myenv/bin/python3 /home/mateo/mittagessen/manage.py send_daily_reminder >> /home/mateo/mittagessen/reminder_log.txt 2>&1
+
+
+für Docker:
+
+00 10 * * 1-5 docker exec lunch_app python manage.py send_daily_reminder
+
+
+
+Benutzer importieren / aktualisieren
+
+python update_users.py

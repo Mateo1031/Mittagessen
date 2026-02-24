@@ -1,49 +1,497 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mittagessen Planer</title>
+    <title>Lunch App</title>
+    <link rel="icon" type="image/png" href="{% static 'images/essen.png' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-        header { background: #333; color: #fff; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        header a { color: #fff; text-decoration: none; margin-left: 15px; }
-        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        .card { background: white; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .btn { display: inline-block; padding: 0.5rem 1rem; background: #28a745; color: white; text-decoration: none; border-radius: 4px; }
-        .btn-danger { background: #dc3545; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-        .alert { padding: 10px; background-color: #d4edda; color: #155724; border-radius: 4px; margin-bottom: 15px; }
+        /* --- ALLGEMEINES DESIGN --- */
+        :root {
+            --nav-bg: #0f172a; 
+            --nav-text: #e2e8f0;
+            --accent-color: #38bdf8; 
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --success-color: #10b981;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right bottom, #dbeafe, #ede9fe, #fce7f3);
+            background-attachment: fixed;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            color: #334155;
+            padding-top: 80px; /* Standard Platz für Navbar */
+        }
+
+        /* --- NAVBAR --- */
+        
+        /* --- STANDORT DROPDOWN --- */
+.standort-dropdown {
+    /* Standard-Browser-Styling entfernen */
+    appearance: none; 
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    
+    /* Design passend zur Navbar */
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 8px 35px 8px 12px; /* Rechts 35px Platz für unseren neuen Pfeil */
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    
+    /* Eigener kleiner Pfeil (als weiße SVG) */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+}
+
+/* Hover & Fokus Effekte */
+.standort-dropdown:hover, .standort-dropdown:focus {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Die Liste, die aufklappt (auf Desktop) dunkel machen */
+.standort-dropdown option {
+    background-color: #0f172a; /* Dunkel wie die Navbar */
+    color: white;
+    padding: 10px;
+}
+
+/* Anpassung für Handys, damit es in der Mitte nicht zu groß wird */
+@media (max-width: 900px) {
+    .standort-dropdown {
+        font-size: 0.85rem;
+        padding: 6px 28px 6px 10px;
+        background-size: 12px;
+    }
+}
+        
+        .navbar {
+            background-color: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            color: var(--nav-text);
+            padding: 0 5%; 
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+
+        .navbar-brand {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: -0.5px;
+            white-space: nowrap;
+            z-index: 1001; /* Über dem Dropdown */
+        }
+        
+        .navbar-brand:hover { transform: scale(1.02); }
+
+        .nav-content-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        /* Desktop Links Container */
+        .nav-links {
+            display: flex;
+            gap: 20px; 
+            align-items: center;
+        }
+
+        .nav-item {
+            color: #94a3b8; 
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .nav-item:hover {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-logout {
+            color: var(--danger-color);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 6px 16px;
+            border-radius: 20px;
+        }
+        .btn-logout:hover {
+            background-color: var(--danger-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .nav-separator {
+            height: 24px;
+            width: 1px;
+            background-color: rgba(255,255,255,0.1);
+            margin: 0 5px;
+        }
+
+        .user-info {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            white-space: nowrap;
+        }
+        .user-info strong { color: white; }
+
+        /* --- HAMBURGER BUTTON (Standardmäßig unsichtbar) --- */
+        .hamburger-btn {
+            display: none; /* Nur auf Mobile sichtbar */
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.8rem;
+            cursor: pointer;
+            z-index: 1002;
+            padding: 5px;
+        }
+
+        /* --- COUNTDOWN TIMER --- */
+        .timer-badge {
+            background: #1e293b; 
+            padding: 6px 16px;
+            border-radius: 50px; 
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); 
+            color: #e2e8f0;
+            white-space: nowrap;
+        }
+        
+        #time-remaining {
+            font-family: 'Courier New', Courier, monospace; 
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .timer-warning {
+            border-color: var(--warning-color);
+            color: var(--warning-color);
+            background: rgba(245, 158, 11, 0.1);
+        }
+        .timer-critical {
+            border-color: var(--danger-color);
+            color: var(--danger-color);
+            background: rgba(239, 68, 68, 0.1);
+            animation: pulse 1.5s infinite;
+        }
+        .timer-finished {
+            background: var(--danger-color);
+            color: white;
+            border-color: var(--danger-color);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); transform: scale(1.02); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); transform: scale(1); }
+        }
+
+        /* --- CONTAINER --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* --- TOASTS --- */
+        .message-container {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .alert-toast {
+            pointer-events: auto;
+            min-width: 300px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideIn 0.3s ease-out;
+            opacity: 1;
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+
+        .alert-toast.fade-out { opacity: 0; transform: translateX(100%); }
+        .alert-error, .alert-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .alert-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .alert-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .alert-info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+
+        .close-btn { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; margin-left: 15px; opacity: 0.7; }
+        .close-btn:hover { opacity: 1; }
+
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* --- RESPONSIVE DROPDOWN (MOBILE) --- */
+        @media (max-width: 900px) {
+            body {
+                padding-top: 80px; /* Normales Padding reicht jetzt wieder */
+            }
+
+            /* Hamburger anzeigen */
+            .hamburger-btn { display: block; }
+
+            /* Nav-Links verstecken (Standard) */
+            .nav-links {
+                position: absolute;
+                top: 70px; /* Direkt unter der Navbar */
+                left: 0;
+                width: 100%;
+                background-color: #0f172a; /* Dunkler Hintergrund wie Navbar */
+                flex-direction: column;
+                align-items: stretch; /* Volle Breite */
+                padding: 20px;
+                gap: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                border-top: 1px solid rgba(255,255,255,0.1);
+                
+                /* Animation: Versteckt -> Sichtbar */
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-20px);
+                transition: all 0.3s ease;
+                z-index: 999;
+            }
+
+            /* Wenn Klasse "active" hinzugefügt wird (per JS) */
+            .nav-links.active {
+                opacity: 1;
+                pointer-events: auto;
+                transform: translateY(0);
+            }
+
+            /* Links Styling im Dropdown */
+            .nav-item {
+                width: 100%; /* Volle Breite */
+                padding: 12px 15px;
+                font-size: 1rem;
+                justify-content: flex-start; /* Linksbündig */
+                background: rgba(255,255,255,0.05);
+                box-sizing: border-box;
+            }
+
+            .nav-separator { display: none; }
+            .user-info { 
+                order: -1; /* User Info ganz oben im Menü */
+                text-align: center;
+                padding-bottom: 10px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                margin-bottom: 5px;
+            }
+            
+            .btn-logout {
+                margin-top: 10px;
+                justify-content: center;
+            }
+
+            /* Timer anpassen, damit er neben dem Hamburger Platz hat */
+            .timer-text-label { display: none; }
+            .timer-badge { padding: 4px 10px; font-size: 0.8rem; }
+            
+            /* Toasts unter das Menü schieben */
+            .message-container { width: 90%; left: 5%; right: 5%; }
+        }
+        /* --- PROFIL LINK STYLES --- */
+.user-info-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #cbd5e1;
+    padding: 6px 12px;
+    border-radius: 30px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.user-info-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.user-text {
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.user-text strong {
+    color: white;
+}
+
+.user-avatar-small {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Anpassung für Mobile Menu Dropdown */
+@media (max-width: 900px) {
+    .user-info-link {
+        justify-content: center; /* Zentriert im Mobile Menu */
+        margin-bottom: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
     </style>
 </head>
 <body>
-    <header>
-        <h1>🍔 Lunch-App</h1>
-        <nav>
-            {% if user.is_authenticated %}
-                <span>Hallo, {{ user.username }}</span>
-                <a href="{% url 'home' %}">Restaurants</a>
-                <a href="{% url 'uebersicht' %}">Bestellliste</a>
-                <form action="{% url 'logout' %}" method="post" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit" style="background:none; border:none; color:white; cursor:pointer; font-size:1rem;">Logout</button>
-                </form>
-            {% else %}
-                <a href="{% url 'login' %}">Login</a>
-                <a href="{% url 'register' %}">Registrieren</a>
-            {% endif %}
-        </nav>
-    </header>
+
+    {% if messages %}
+        <div class="message-container">
+            {% for message in messages %}
+                <div class="alert-toast alert-{{ message.tags }}">
+                    <span>{{ message }}</span>
+                    <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <nav class="navbar">
+        <a href="{% url 'home' %}" class="navbar-brand">
+            <span style="font-size: 1.6rem; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));">🍽️</span> 
+            Lunch App
+        </a>
+          
+        <div class="nav-item-container">
+            <form action="#" method="GET" style="margin: 0;">
+                <select onchange="window.location.href=this.value" class="standort-dropdown">
+                    {% for s in alle_standorte %}
+                        <option value="{% url 'set_standort' s.id %}" 
+                                {% if request.session.aktiver_standort_id == s.id %}selected{% endif %}>
+                            📍 {{ s.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+          
+        <a href="{% url 'feedback' %}" class="nav-item" style="margin-left: 15px;">
+              <span>💬</span> Feedback
+        </a>
+
+        <div class="nav-content-right">
+            
+            <div id="deadline-timer" class="timer-badge">
+                <span style="opacity: 0.8;">⏱️</span>
+                <span class="timer-text-label" style="text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px;">Noch</span>
+                <span id="time-remaining">--:--:--</span>
+            </div>
+
+            <button class="hamburger-btn" onclick="toggleMenu()">
+                ☰
+            </button>
+
+            <div class="nav-links" id="nav-links-container">
+                {% if user.is_authenticated %}
+                    
+                    <a href="{% url 'profile' %}" class="user-info-link" title="Zum Profil">
+                        <div class="user-avatar-small">
+                            {{ user.first_name|slice:":1"|upper }}
+                        </div>
+                        <span class="user-text">Hallo <strong>{{ user.first_name }}</strong></span>
+                    </a>
+                    <div class="nav-separator"></div>
+
+                    <a href="{% url 'home' %}" class="nav-item" onclick="toggleMenu()"><span>🏠</span> Start</a>
+                    <a href="{% url 'uebersicht' %}" class="nav-item" onclick="toggleMenu()"><span>📋</span> Übersicht</a>
+                    
+                    {% if user.is_superuser %}
+                        <a href="/admin" class="nav-item" target="_blank" style="color: #fcd34d;" onclick="toggleMenu()"><span>⚙️</span> Admin</a>
+                    {% endif %}
+                    
+                    <form action="{% url 'logout' %}" method="post" style="display:inline; width: 100%;">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-item btn-logout" style="cursor:pointer; width: 100%; justify-content: center;">
+                            🚪 Logout
+                        </button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}" class="nav-item" onclick="toggleMenu()">🔑 Login</a>
+                    <a href="{% url 'register' %}" class="nav-item" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);" onclick="toggleMenu()">✨ Registrieren</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
 
     <div class="container">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-        
-        {% block content %}{% endblock %}
+        {% block content %}
+        {% endblock %}
     </div>
+    
+    <script>
+        // Durch die Anführungszeichen verschwinden die roten Fehler in Cursor
+        const deadlineHour = parseInt("{{ system_deadline_stunde|default:11 }}", 10);
+        const deadlineMinute = parseInt("{{ system_deadline_minute|default:0 }}", 10);
+    </script>
+    
+    <script src="{% static 'js/global.js' %}"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

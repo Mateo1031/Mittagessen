@@ -1,0 +1,47 @@
+{% extends 'lunch_app/base.html' %}
+{% block content %}
+
+<div class="section-container" style="max-width: 600px; margin: 0 auto; margin-top: 40px;">
+    <div class="summary-card" style="padding: 30px;">
+        <h2 style="margin-top: 0; color: #1e293b; font-size: 1.8rem;">💬 Feedback senden</h2>
+        <p style="color: #64748b; margin-bottom: 25px; line-height: 1.5;">
+            Hast du einen Fehler gefunden, Wünsche für neue Funktionen oder eine Idee für ein neues Restaurant? Schreib mir einfach eine kurze Nachricht!
+        </p>
+
+        <form method="POST">
+            {% csrf_token %}
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #475569;">Betreff</label>
+                <input type="text" name="betreff" required 
+                       style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #e2e8f0; font-family: inherit; font-size: 1rem; box-sizing: border-box; transition: all 0.2s;" 
+                       placeholder="Worum geht es kurz?">
+            </div>
+
+            <div style="margin-bottom: 30px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #475569;">Deine Nachricht</label>
+                <textarea name="nachricht" rows="6" required 
+                          style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #e2e8f0; font-family: inherit; font-size: 1rem; box-sizing: border-box; resize: vertical; transition: all 0.2s;" 
+                          placeholder="Beschreibe dein Anliegen hier..."></textarea>
+            </div>
+
+            <button type="submit" 
+                    style="width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);">
+                📤 Feedback abschicken
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+    input:focus, textarea:focus {
+        border-color: #3b82f6 !important;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    button[type="submit"]:hover {
+        transform: translateY(-2px);
+    }
+</style>
+
+{% endblock %}

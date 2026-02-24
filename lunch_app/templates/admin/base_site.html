@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        /* Versteckt den User-Container oben rechts */
+        .navbar-nav.ml-auto li.user-menu,
+        .navbar-nav.ml-auto li.dropdown,
+        #jazzy-navuser {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+        }
+    </style>
+{% endblock %}

@@ -1,11 +1,190 @@
 {% extends 'lunch_app/base.html' %}
+{% load static %}
+
 {% block content %}
-<div class="card" style="max-width: 400px; margin: auto;">
-    <h2>Registrieren</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="btn">Konto erstellen</button>
-    </form>
+
+<style>
+    /* 1. Globales Reset (Gleich wie Login) */
+    body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* Verhindert das Scrollen der Hauptseite */
+    }
+
+    /* 2. Hintergrund & Wrapper */
+    .auth-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: url('https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=2070&auto=format&fit=crop') no-repeat center center;
+        background-size: cover;
+        z-index: 9999; /* Überdeckt alles */
+    }
+
+    /* 3. Overlay */
+    .auth-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.5);
+        backdrop-filter: blur(4px);
+    }
+
+    /* 4. Die Karte (Angepasst für längere Formulare) */
+    .auth-card {
+        position: relative;
+        z-index: 10000;
+        background: rgba(255, 255, 255, 0.9);
+        width: 90%;
+        max-width: 450px; /* Etwas breiter als Login */
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        text-align: center;
+        
+        /* WICHTIG für Registrierung: Falls das Formular lang ist */
+        max-height: 90vh; 
+        overflow-y: auto; /* Scrollen innerhalb der Karte erlauben */
+    }
+
+    /* Scrollbar in der Karte hübsch machen (Chrome/Safari) */
+    .auth-card::-webkit-scrollbar { width: 6px; }
+    .auth-card::-webkit-scrollbar-track { background: transparent; }
+    .auth-card::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* 5. Inhalte */
+    .auth-icon { font-size: 3rem; display: block; margin-bottom: 5px; }
+    
+    .auth-header h2 {
+        margin: 0;
+        color: #1e293b;
+        font-size: 1.6rem;
+        font-weight: 800;
+    }
+    .auth-header p {
+        color: #64748b;
+        margin-top: 5px;
+        margin-bottom: 25px;
+        font-size: 0.95rem;
+    }
+
+    /* Formular */
+    .form-group { text-align: left; margin-bottom: 15px; }
+    
+    .form-group label {
+        display: block;
+        color: #475569;
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin-bottom: 5px;
+        margin-left: 5px;
+    }
+
+    /* Django rendert Inputs standardmäßig, wir stylen sie hier */
+    .auth-form input {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        outline: none;
+        transition: all 0.2s;
+        background: #f8fafc;
+    }
+
+    .auth-form input:focus {
+        border-color: #10b981; /* Grün beim Fokus */
+        background: white;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+    }
+
+    /* Hilfetexte und Fehler von Django */
+    .helptext {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 4px;
+        display: block;
+        line-height: 1.3;
+    }
+    
+    ul.errorlist {
+        list-style: none;
+        padding: 0;
+        margin: 5px 0 0 0;
+        color: #ef4444;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    /* Button (Grün für Registrierung) */
+    .btn-auth {
+        width: 100%;
+        padding: 14px;
+        margin-top: 20px;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+    .btn-auth:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3); }
+    .btn-auth:active { transform: scale(0.98); }
+
+    /* Footer */
+    .auth-footer { margin-top: 25px; font-size: 0.9rem; color: #64748b; }
+    .auth-footer a { color: #10b981; font-weight: 700; text-decoration: none; }
+</style>
+
+<div class="auth-wrapper">
+    <div class="auth-overlay"></div>
+
+    <div class="auth-card">
+        <div class="auth-header">
+            <span class="auth-icon">📝</span>
+            <h2>Konto erstellen</h2>
+            <p>Schließ dich uns an zum Mittagessen!</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    
+                    {{ field }}
+                    
+                    {% if field.errors %}
+                        {{ field.errors }}
+                    {% endif %}
+                    
+                    {% if field.help_text %}
+                        <span class="helptext">{{ field.help_text }}</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <button type="submit" class="btn-auth">Jetzt registrieren ✨</button>
+        </form>
+
+        <div class="auth-footer">
+            Doch schon dabei? <a href="{% url 'login' %}">Hier einloggen</a>
+        </div>
+    </div>
 </div>
+
 {% endblock %}
