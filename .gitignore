@@ -1,25 +1,21 @@
-# Python-Cache
+# Python & Django
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Django-Datenbank (WICHTIG: Die lokale DB soll nicht auf GitHub)
-db.sqlite3
-db.sqlite3-journal
-
-# Lokale Einstellungen & Geheimnisse
-.env
-local_settings.py
-
-# Statische Dateien (werden auf dem Server generiert)
-/static/
-
-# Virtuelle Umgebungen
+*.pyo
 venv/
 env/
-myenv/
-.venv/
 
-# Betriebssystem-Dateien
+# Datenbank (Auf keinen Fall die Live-Datenbank ins Git packen!)
+db.sqlite3
+db_data/
+
+# Statische Dateien & Medien (werden meist vom Server generiert)
+staticfiles/
+media/
+
+# Lokale Umgebungsvariablen (für Passwörter)
+.env
+
+# MacOS / Windows Systemdateien
 .DS_Store
 Thumbs.db

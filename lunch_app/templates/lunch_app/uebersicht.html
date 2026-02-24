@@ -275,7 +275,13 @@
                                     </span>
                                 {% endif %}
                                 {% if item.benutzer != request.user and not ist_zu_spaet %}
-                                    <a href="{% url 'copy_other_order' item.benutzer.id %}" class="btn-copy-user js-confirm" data-msg="Kopieren?">👯</a>
+                                    <a href="{% url 'copy_other_order' item.benutzer.id %}" 
+                                    class="btn-copy-order" 
+                                    title="{% if item.lokal_anmeldung %}Ich komme auch mit!{% else %}Gleiches Gericht bestellen{% endif %}">
+                                        {% if item.lokal_anmeldung %}
+                                            ✋ {% else %}
+                                            📋 {% endif %}
+                                    </a>
                                 {% endif %}
                                 
                             </div>
@@ -290,7 +296,13 @@
                                 <div class="meta-row">
                                     <span class="type-badge {% if item.art == 'LOKAL' %}type-lokal{% elif item.art == 'TAKEAWAY' %}type-takeaway{% else %}type-delivery{% endif %}">{{ item.get_art_display }}</span>
                                     {% if request.user.is_superuser or item.benutzer == request.user and not ist_zu_spaet %}
-                                        <a href="{% url 'stornieren' item.id %}" class="btn-delete-item js-confirm" data-msg="Löschen?">×</a>
+                                        {% if item.lokal_anmeldung %}
+                                            {# Wir nehmen die ID direkt vom Restaurant-Objekt, das wir an das Item geklebt haben #}
+                                            <a href="{% url 'stornieren_lokal' item.restaurant_obj.id %}" class="btn-delete-item js-confirm" data-msg="Abmelden?">×</a>
+                                        {% else %}
+                                            {# Bei normalen Bestellungen: item -> gericht -> restaurant -> id #}
+                                            <a href="{% url 'stornieren' item.id %}" class="btn-delete-item js-confirm" data-msg="Löschen?">×</a>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             </div>

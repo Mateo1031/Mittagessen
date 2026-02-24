@@ -1,0 +1,9 @@
+/* admin_fix.css */
+.login-box .login-logo img, 
+.login-page .brand-logo img {
+    max-width: 150px !important;
+    max-height: 100px !important;
+    width: auto !important;
+    margin: 0 auto;
+    display: block;
+}

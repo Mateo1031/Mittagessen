@@ -201,6 +201,13 @@ def restaurant_menu(request, restaurant_id):
     
     is_locked = True if (org_entry and org_entry.bestellung_bestaetigt) else False
     
+    user_ist_dabei = Stimme.objects.filter(
+        benutzer=request.user, 
+        datum=heute, 
+        restaurant=restaurant, 
+        art='LOKAL'
+    ).exists()
+    
     return render(request, 'lunch_app/menu.html', {
         'restaurant': restaurant,
         'ist_zu_spaet': now.time() > deadline,
@@ -215,20 +222,28 @@ def restaurant_menu(request, restaurant_id):
         'social_proof': social_proof,
         'favoriten_ids': favoriten_ids,
         'gerichte_liste': gerichte_liste,
-        'existing_order_art': existing_order_art
+        'existing_order_art': existing_order_art,
+        'user_ist_dabei': user_ist_dabei,
     })
 
 @login_required
 def bestellung_abschliessen(request):
     if request.method == 'POST':
+        # 1. Zeit und Datum sofort festlegen (bevor sie benutzt werden)
         now = timezone.localtime(timezone.now())
         deadline = get_deadline()
         heute = now.date()
+        
+        # 2. Bestehende Bestellungen des Users für heute löschen (Sicherheits-Reset)
+        # Das stellt sicher, dass man nicht gleichzeitig "Lokal" und "Lieferung" hat
+        Bestellung.objects.filter(benutzer=request.user, datum__date=heute).delete()
+
+        # 3. Daten aus dem Formular holen
         restaurant_id = request.POST.get('restaurant_id')
         restaurant = get_object_or_404(Restaurant, id=restaurant_id)
-
         current_art = request.POST.get('art') or request.session.get('gewaehlte_art', 'LOKAL')
 
+        # 4. Prüfen, ob die Bestellung bereits durch einen Organisator gesperrt wurde
         check_org = TagesVerantwortlicher.objects.filter(
             restaurant=restaurant, 
             datum=heute, 
@@ -239,14 +254,29 @@ def bestellung_abschliessen(request):
             messages.error(request, "⚠️ Die Bestellung ist bereits abgeschlossen! Keine Änderungen mehr möglich.")
             return redirect('uebersicht')
 
+        # 5. Deadline-Check (Superuser dürfen immer)
         if now.time() > deadline and not request.user.is_superuser:
             clear_messages(request)
-            messages.error(request, "Zu spät! Bestellschluss war um 11:00 Uhr.")
+            messages.error(request, f"Zu spät! Bestellschluss war um {deadline.strftime('%H:%M')} Uhr.")
             return redirect('home')
 
-        
-        Stimme.objects.update_or_create(benutzer=request.user, datum=heute, defaults={'restaurant': restaurant, 'art': current_art})
-        Bestellung.objects.filter(benutzer=request.user, datum__date=heute, gericht__restaurant=restaurant).delete()
+        # --- FALL A: NUR LOKAL ANMELDEN ---
+        if current_art == 'LOKAL':
+            # Stimme abgeben/aktualisieren
+            Stimme.objects.update_or_create(
+                benutzer=request.user, 
+                datum=heute, 
+                defaults={'restaurant': restaurant, 'art': 'LOKAL'}
+            )
+            messages.success(request, f"✋ Du bist bei {restaurant.name} dabei!")
+            return redirect('uebersicht')
+
+        # --- FALL B: GERÄTE BESTELLEN (DELIVERY/TAKEAWAY) ---
+        Stimme.objects.update_or_create(
+            benutzer=request.user, 
+            datum=heute, 
+            defaults={'restaurant': restaurant, 'art': current_art}
+        )
 
         gewaehlte_gerichte_ids = request.POST.getlist('gerichte')
         if gewaehlte_gerichte_ids:
@@ -254,44 +284,40 @@ def bestellung_abschliessen(request):
                 notiz_text = request.POST.get(f'notiz_{g_id}', '').strip()
                 gericht = Gericht.objects.get(id=g_id)
                 optionen_liste = []
+                
+                # Optionen verarbeiten (Radio, Checkbox, Number)
                 for gruppe in gericht.option_groups.all():
                     if gruppe.typ == 'RADIO':
                         item_id = request.POST.get(f"group_{gruppe.id}")
                         if item_id:
                             item = OptionItem.objects.get(id=item_id)
                             optionen_liste.append(f"{item.gericht_verweis.name if item.gericht_verweis else item.name}{' (+'+str(item.aufpreis)+')' if item.aufpreis > 0 else ''}")
+                    
                     elif gruppe.typ == 'CHECKBOX':
                         for item_id in request.POST.getlist(f"group_{gruppe.id}"):
                             item = OptionItem.objects.get(id=item_id)
                             optionen_liste.append(f"{item.gericht_verweis.name if item.gericht_verweis else item.name}{' (+'+str(item.aufpreis)+')' if item.aufpreis > 0 else ''}")
+                    
                     elif gruppe.typ == 'NUMBER':
                         for item in gruppe.items.all():
                             qty = request.POST.get(f"qty_{item.id}")
                             if qty and int(qty) > 0:
-                                optionen_liste.append(f"{qty}x {item.gericht_verweis.name if item.gericht_verweis else item.name}{' (+'+str(item.aufpreis*int(qty))+')' if item.aufpreis > 0 else ''}")
+                                name = item.gericht_verweis.name if item.gericht_verweis else item.name
+                                aufpreis_total = item.aufpreis * int(qty)
+                                optionen_liste.append(f"{qty}x {name}{' (+'+str(aufpreis_total)+')' if aufpreis_total > 0 else ''}")
 
-                Bestellung.objects.create(benutzer=request.user, gericht_id=g_id, art=current_art, notiz=notiz_text or None, optionen_text=" | ".join(optionen_liste) or None)
-            messages.success(request, "Gespeichert!")
+                # Bestellung in DB speichern
+                Bestellung.objects.create(
+                    benutzer=request.user, 
+                    gericht=gericht, 
+                    art=current_art, 
+                    notiz=notiz_text or None, 
+                    optionen_text=" | ".join(optionen_liste) or None
+                )
+            messages.success(request, "Bestellung erfolgreich gespeichert!")
+        else:
+            messages.warning(request, "Du hast kein Gericht ausgewählt.")
             
-        # ... dein vorheriger Code (Bestellung create etc.) ...
-        
-        # NEU: Bei LOKAL nur anmelden, kein Gericht nötig
-        if current_art == 'LOKAL':
-            Bestellung.objects.filter(benutzer=request.user, datum__date=heute, art='LOKAL').delete()
-            # Dummy-Bestellung ohne Gericht
-            Bestellung.objects.create(
-                benutzer=request.user,
-                gericht=None,
-                art='LOKAL',
-                lokal_anmeldung=True
-            )
-            Stimme.objects.update_or_create(
-                benutzer=request.user, 
-                datum=heute, 
-                defaults={'restaurant': restaurant, 'art': 'LOKAL'}
-            )
-            messages.success(request, "✋ Du bist dabei!")
-            return redirect('uebersicht')
     return redirect('uebersicht')
 
 @login_required
@@ -408,12 +434,29 @@ def auto_tagesabschluss():
             send_mail("🤖 Lunch-Abschluss", msg, None, [nutzer.email], fail_silently=True)
     return count
 
+# In der views.py
+@login_required
+def stornieren_lokal(request, restaurant_id): # Wir nehmen jetzt die restaurant_id!
+    from .models import Stimme, Bestellung, Restaurant
+    import datetime
+    heute = datetime.date.today()
+    restaurant = get_object_or_404(Restaurant, id=restaurant_id)
+    
+    # 1. Die Stimme für dieses Restaurant heute löschen
+    Stimme.objects.filter(benutzer=request.user, datum=heute, restaurant=restaurant).delete()
+    
+    # 2. Die dazugehörige "Lokal"-Bestellung (Dummy) löschen
+    Bestellung.objects.filter(benutzer=request.user, datum__date=heute, art='LOKAL').delete()
+    
+    messages.success(request, f"Abmeldung für {restaurant.name} war erfolgreich.")
+    return redirect('uebersicht')
+
 @login_required
 def bestell_uebersicht(request):
     auto_tagesabschluss()
     heute = timezone.localtime(timezone.now()).date()
     
-    # 1. Aktiven Standort ermitteln (genau wie auf der Startseite)
+    # 1. Aktiven Standort ermitteln
     aktiver_standort_id = request.session.get('aktiver_standort_id')
     if not aktiver_standort_id and hasattr(request.user, 'profile') and request.user.profile.standard_standort:
         aktiver_standort_id = request.user.profile.standard_standort.id
@@ -422,28 +465,31 @@ def bestell_uebersicht(request):
     # 2. Basis-Abfrage: Alle Bestellungen von heute
     bestellungen = Bestellung.objects.filter(datum__date=heute)
 
-    # 3. FILTERN: Nur Bestellungen für Restaurants an diesem Standort!
+    # 3. FILTERN
     if aktiver_standort_id:
-        # Wir filtern über 2 Ecken: Bestellung -> Gericht -> Restaurant -> Standort
         bestellungen = bestellungen.filter(gericht__restaurant__standort_id=aktiver_standort_id)
 
-    # 4. Daten für die Anzeige optimieren und sortieren
+    # 4. Daten optimieren
     bestellungen = bestellungen.select_related(
         'benutzer', 'gericht', 'gericht__restaurant'
     ).order_by('gericht__restaurant__name', 'art', 'benutzer__username')
 
-    user_hat_bestellt = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).exists()
+    user_hat_bestellt = (
+        Bestellung.objects.filter(benutzer=request.user, datum__date=heute).exists() or
+        Stimme.objects.filter(benutzer=request.user, datum=heute, art='LOKAL').exists()
+    )
     
     restaurant_daten = {}
     gesamt_total = 0
     
-    # ... ab hier bleibt dein restlicher Code der Funktion exakt gleich! ...
-    # for b in bestellungen:
-    #     res = b.gericht.restaurant
-    # ...
-    
     for b in bestellungen:
-        res = b.gericht.restaurant
+        # Sicherheits-Check für das Restaurant
+        if b.gericht:
+            res = b.gericht.restaurant
+        else:
+            # Falls kein Gericht (Lokal), brauchen wir das Restaurant aus der Stimme oder dem Kontext
+            continue 
+
         group_key = f"{res.id}_{b.art}" 
         
         if group_key not in restaurant_daten:
@@ -460,22 +506,23 @@ def bestell_uebersicht(request):
                 'restaurant_obj': res,
                 'art': b.art,
                 'art_display': b.get_art_display(),
-                'bestellzeit': verantwortlicher.bestellzeit if verantwortlicher else None,
                 'bestaetigt': verantwortlicher.bestellung_bestaetigt if verantwortlicher else False,
-                # HIER WIRD DIE ZAHLUNGSART AN DAS TEMPLATE ÜBERGEBEN
                 'zahlungsart': getattr(verantwortlicher, 'zahlungsart', 'SONST') if verantwortlicher else 'SONST',
                 'organizer': verantwortlicher.nutzer if (verantwortlicher and verantwortlicher.nutzer_id) else None,
                 'fahrer_liste': verantwortlicher.fahrer.all() if verantwortlicher else [],
                 'bestellzeit': verantwortlicher.bestellzeit if verantwortlicher else None,
             }
         
-                # NEU:
+        # Preisberechnung mit Sicherheitsgurt
         if b.lokal_anmeldung or not b.gericht:
             preis = 0
         else:
             preis = float(b.gericht.preis)
-        if b.optionen_text:
-            for m in re.findall(r'\(\+(\d+(?:\.\d+)?)\)', b.optionen_text): preis += float(m)
+            if b.optionen_text:
+                import re
+                for m in re.findall(r'\(\+(\d+(?:\.\d+)?)\)', b.optionen_text): 
+                    preis += float(m)
+        
         b.kalkulierter_preis = preis
         b.optionen_liste_split = b.optionen_text.split(" | ") if b.optionen_text else []
         
@@ -483,24 +530,75 @@ def bestell_uebersicht(request):
         restaurant_daten[group_key]['summe'] += preis
         gesamt_total += preis
         
-        if b.lokal_anmeldung or not b.gericht:
-            continue  # LOKAL-Anmeldungen in der Zusammenfassung überspringen
-        key = f"{b.gericht.name}___{b.optionen_text or ''}___{b.notiz or ''}"
-        if key not in restaurant_daten[group_key]['zusammenfassung']:
-            restaurant_daten[group_key]['zusammenfassung'][key] = {
-                'anzahl': 0, 'name': b.gericht.name, 'preis': preis, 'notiz': b.notiz, 'optionen_liste': b.optionen_liste_split
-            }
-        restaurant_daten[group_key]['zusammenfassung'][key]['anzahl'] += 1
+        if not (b.lokal_anmeldung or not b.gericht):
+            key = f"{b.gericht.name}___{b.optionen_text or ''}___{b.notiz or ''}"
+            if key not in restaurant_daten[group_key]['zusammenfassung']:
+                restaurant_daten[group_key]['zusammenfassung'][key] = {
+                    'anzahl': 0, 'name': b.gericht.name, 'preis': preis, 'notiz': b.notiz, 'optionen_liste': b.optionen_liste_split
+                }
+            restaurant_daten[group_key]['zusammenfassung'][key]['anzahl'] += 1
+    
+    # 5. LOKAL-Teilnehmer aus Stimmen holen
+    lokal_stimmen = Stimme.objects.filter(datum=heute, art='LOKAL').select_related('benutzer', 'restaurant')
+    if aktiver_standort_id:
+        lokal_stimmen = lokal_stimmen.filter(restaurant__standort_id=aktiver_standort_id)
+
+    # Klasse einmalig definieren
+    class LokalItem:
+        def __init__(self, benutzer, restaurant_obj):
+            self.benutzer = benutzer
+            self.restaurant_obj = restaurant_obj
+            self.id = 999 
+            self.gericht = None
+            self.lokal_anmeldung = True
+            self.kalkulierter_preis = 0
+            self.mein_lieferanteil = 0
+            self.preis_inkl_lieferung = 0
+            self.optionen_liste_split = []
+            self.notiz = None
+            self.art = 'LOKAL'
+        def get_art_display(self):
+            return 'Im Restaurant essen'
+
+    for stimme in lokal_stimmen:
+        res = stimme.restaurant
+        group_key = f"{res.id}_LOKAL"
         
+        if group_key not in restaurant_daten:
+            verantwortlicher = TagesVerantwortlicher.objects.filter(restaurant=res, datum=heute, art='LOKAL').first()
+            restaurant_daten[group_key] = {
+                'items': [], # Wieder 'items' nutzen!
+                'zusammenfassung': {},
+                'summe': 0,
+                'mindestwert': 0,
+                'percent': 100,
+                'reached': True,
+                'missing': 0,
+                'restaurant_obj': res,
+                'art': 'LOKAL',
+                'art_display': 'Im Restaurant essen',
+                'bestaetigt': verantwortlicher.bestellung_bestaetigt if verantwortlicher else False,
+                'zahlungsart': 'SONST',
+                'organizer': verantwortlicher.nutzer if (verantwortlicher and verantwortlicher.nutzer_id) else None,
+                'fahrer_liste': verantwortlicher.fahrer.all() if verantwortlicher else [],
+                'anteil_pro_person': 0.0,
+                'bestellzeit': verantwortlicher.bestellzeit if verantwortlicher else None,
+            }
+
+        # WICHTIG: Hier wieder 'items' statt 'bestellungen_liste'
+        restaurant_daten[group_key]['items'].append(LokalItem(stimme.benutzer, res))
+
+    # 6. Liefergebühren berechnen (Jetzt werden auch Lokal-Gäste in d['items'] gefunden)
     for d in restaurant_daten.values():
         res = d['restaurant_obj']
-        
+        # Wir zählen alle eindeutigen Benutzer in 'items'
         unique_besteller = set([item.benutzer for item in d['items']])
         anzahl_besteller = len(unique_besteller)
         
-        # 1. Anteil berechnen
+        # ... Rest deines Codes (Anteil berechnen etc.) ist korrekt ...
+        
         anteil = 0.0
-        if res.liefergebuehren > 0 and anzahl_besteller > 0:
+        if hasattr(res, 'liefergebuehren') and res.liefergebuehren > 0 and anzahl_besteller > 0:
             anteil = float(res.liefergebuehren) / anzahl_besteller
             d['anteil_pro_person'] = anteil
             d['summe'] += float(res.liefergebuehren)
@@ -508,34 +606,29 @@ def bestell_uebersicht(request):
         else:
             d['anteil_pro_person'] = 0.0
 
-        # 2. Den Anteil nur an das ERSTE Gericht einer Person heften
         seen_users = set() 
         for item in d['items']:
             item.preis_inkl_lieferung = item.kalkulierter_preis + anteil
-            
             if item.benutzer.id not in seen_users:
-                item.mein_lieferanteil = anteil  # Hier speichern wir die echten CHF (z.B. 1.50)
+                item.mein_lieferanteil = anteil
                 seen_users.add(item.benutzer.id)
             else:
-                item.mein_lieferanteil = 0.0     # Alle weiteren Gerichte kriegen 0.0
-
-        # 3. Restliche Berechnungen
-        for key, info in d['zusammenfassung'].items():
-            info['preis_inkl_lieferung'] = info['preis'] + anteil
+                item.mein_lieferanteil = 0.0
 
         mv = float(d['mindestwert'])
         d['percent'] = min((d['summe'] / mv) * 100, 100) if mv > 0 else 100
         d['reached'] = d['summe'] >= mv
         d['missing'] = max(mv - d['summe'], 0)
 
-    current_art = request.session.get('gewaehlte_art')
-    if not current_art:
-        current_art = 'LOKAL' 
-        
+    current_art = request.session.get('gewaehlte_art', 'LOKAL')
+    from .views import get_deadline # Sicherstellen, dass die Funktion geladen ist
+
     return render(request, 'lunch_app/uebersicht.html', {
-        'restaurant_daten': restaurant_daten, 'gesamt_total': gesamt_total, 
+        'restaurant_daten': restaurant_daten, 
+        'gesamt_total': gesamt_total, 
         'ist_zu_spaet': timezone.localtime(timezone.now()).time() > get_deadline(), 
-        'user_hat_bestellt': user_hat_bestellt, 'current_art': current_art
+        'user_hat_bestellt': user_hat_bestellt, 
+        'current_art': current_art
     })
 
 @login_required
@@ -551,13 +644,54 @@ def toggle_favorit(request, gericht_id):
 @login_required
 def copy_other_order(request, user_id):
     now = timezone.localtime(timezone.now())
-    if now.time() > get_deadline() and not request.user.is_superuser: return redirect('uebersicht')
-    target = get_object_or_404(User, id=user_id)
-    vorlage = Bestellung.objects.filter(benutzer=target, datum__date=now.date())
-    if not vorlage.exists(): return redirect('uebersicht')
-    Bestellung.objects.filter(benutzer=request.user, datum__date=now.date()).delete()
-    Stimme.objects.update_or_create(benutzer=request.user, datum=now.date(), defaults={'restaurant': vorlage.first().gericht.restaurant, 'art': vorlage.first().art})
-    Bestellung.objects.bulk_create([Bestellung(benutzer=request.user, gericht=b.gericht, art=b.art, notiz=b.notiz, optionen_text=b.optionen_text) for b in vorlage])
+    heute = now.date()
+    if now.time() > get_deadline() and not request.user.is_superuser:
+        messages.error(request, "Zu spät zum Kopieren!")
+        return redirect('uebersicht')
+    
+    target_user = get_object_or_404(User, id=user_id)
+    
+    # 1. Zuerst prüfen: Wo geht der Kollege heute essen?
+    target_vote = Stimme.objects.filter(benutzer=target_user, datum=heute).first()
+    
+    if not target_vote:
+        messages.warning(request, "Dieser Kollege hat heute noch nichts gewählt.")
+        return redirect('uebersicht')
+
+    # Eigene alte Bestellungen von heute löschen (Reset)
+    Bestellung.objects.filter(benutzer=request.user, datum__date=heute).delete()
+
+    # FALL A: Der Kollege ist LOKAL dabei
+    if target_vote.art == 'LOKAL':
+        Stimme.objects.update_or_create(
+            benutzer=request.user, 
+            datum=heute, 
+            defaults={'restaurant': target_vote.restaurant, 'art': 'LOKAL'}
+        )
+        messages.success(request, f"Check! Du bist jetzt auch bei {target_vote.restaurant.name} dabei. ✋")
+    
+    # FALL B: Der Kollege hat eine Liefer-Bestellung (Gerichte kopieren)
+    else:
+        vorlage = Bestellung.objects.filter(benutzer=target_user, datum__date=heute)
+        if vorlage.exists():
+            Stimme.objects.update_or_create(
+                benutzer=request.user, 
+                datum=heute, 
+                defaults={'restaurant': target_vote.restaurant, 'art': target_vote.art}
+            )
+            # Alle Gerichte des Kollegen für mich duplizieren
+            for b in vorlage:
+                Bestellung.objects.create(
+                    benutzer=request.user,
+                    gericht=b.gericht,
+                    art=b.art,
+                    notiz=b.notiz,
+                    optionen_text=b.optionen_text
+                )
+            messages.success(request, f"Bestellung von {target_user.first_name or target_user.username} wurde kopiert! 🍕")
+        else:
+            messages.warning(request, "Keine Gerichte zum Kopieren gefunden.")
+
     return redirect('uebersicht')
 
 @login_required

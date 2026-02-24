@@ -78,4 +78,6 @@ urlpatterns = [
     path('toggle_driver/<int:restaurant_id>/', views.toggle_driver, name='toggle_driver'),
     path('standort-wechseln/<int:standort_id>/', views.set_active_standort, name='set_standort'),
     path('toggle-show-phone/', views.toggle_show_phone, name='toggle_show_phone'),
+    path('bestellen-abschliessen/', views.bestellung_abschliessen, name='bestellen_abschliessen'),
+    path('stornieren-lokal/<int:restaurant_id>/', views.stornieren_lokal, name='stornieren_lokal'),
 ]

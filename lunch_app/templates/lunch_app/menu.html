@@ -245,31 +245,65 @@
                             {% endwith %}
                             {% endfor %}
                         {% endif %}
-                        {% if alte_art == 'LOKAL' %}
-                        <form method="post" action="{% url 'bestellen_abschliessen' %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="restaurant_id" value="{{ restaurant.id }}">
-                            <input type="hidden" name="art" value="LOKAL">
-                            <button type="submit" style="
-                                width: 100%;
-                                padding: 16px;
-                                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                font-size: 1.1rem;
-                                font-weight: 700;
-                                cursor: pointer;
-                                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-                                margin-bottom: 20px;
-                            ">✋ Ich bin dabei</button>
-                        </form>
-                        {% endif %}
+                        
                     {% endfor %}
                     <tr id="no-results-message" style="display: none;">
                         <td colspan="4" class="empty-state">Nichts gefunden.</td>
                     </tr>
                 </table>
+                {% if alte_art == 'LOKAL' %}
+                <div class="lokal-container" style="margin-bottom: 25px;">
+                    <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px; font-weight: 500;">
+                        {% if user_ist_dabei %}✓ Du bist für heute angemeldet{% else %}Möchtest du heute vor Ort mitessen?{% endif %}
+                    </p>
+
+                    <div style="display: flex; gap: 12px; height: 56px;">
+                        <form method="post" action="{% url 'bestellen_abschliessen' %}" style="flex: 2; display: flex;">
+                            {% csrf_token %}
+                            <input type="hidden" name="restaurant_id" value="{{ restaurant.id }}">
+                            <input type="hidden" name="art" value="LOKAL">
+                            <button type="submit" style="
+                                flex: 1;
+                                border: none;
+                                border-radius: 16px;
+                                background: #10b981;
+                                color: white;
+                                font-size: 1rem;
+                                font-weight: 700;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 8px;
+                                box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+                                transition: transform 0.1s ease;
+                            " onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
+                                <span>✋</span> {% if user_ist_dabei %}Dabei bleiben{% else %}Ich bin dabei{% endif %}
+                            </button>
+                        </form>
+
+                        {% if user_ist_dabei %}
+                        <a href="{% url 'stornieren_lokal' restaurant.id %}" class="js-confirm" data-msg="Abmelden?" style="flex: 1; text-decoration: none;">
+                            <div style="
+                                height: 100%;
+                                border-radius: 16px;
+                                background:rgb(233, 116, 116);
+                                border: 2px solid #fee2e2;
+                                color:rgb(255, 255, 255);
+                                font-size: 0.95rem;
+                                font-weight: 600;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                transition: all 0.2s ease;
+                            ">
+                                Abmelden
+                            </div>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -338,6 +372,15 @@
         .lokal-mode .selectable-row {
             cursor: default;
             pointer-events: none;
+        }
+        /* Herz wieder aktivieren */
+        .lokal-mode .col-fav {
+            pointer-events: all !important;
+        }
+        .lokal-mode .fav-icon {
+            pointer-events: all !important;
+            cursor: pointer !important;
+        }
         }
         /* Bestehende Styles */
         .error-container { background: white; border-radius: 16px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-top: 40px; border-top: 4px solid #f1f5f9; }
