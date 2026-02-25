@@ -108,9 +108,7 @@ from django.contrib.auth.models import User
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
     can_delete = False
-    verbose_name_plural = 'Zusätzliche Profil-Daten (Standort, Handynummer, Benachrichtigungen)'
-    # Optional: Du kannst classes hinzufügen, wenn es standardmäßig zugeklappt sein soll
-    # classes = ['collapse']
+    verbose_name_plural = 'Profil'
 
 def benutzer_deaktivieren(modeladmin, request, queryset):
     # 1. Login sperren
@@ -136,10 +134,27 @@ def benutzer_aktivieren(modeladmin, request, queryset):
     )
 benutzer_aktivieren.short_description = "Ausgewählte Benutzer aktivieren"
 
+def lokales_passwort_loeschen(modeladmin, request, queryset):
+    for user in queryset:
+        # Macht das Passwort unbrauchbar (genau wie das Häkchen beim Erstellen)
+        user.set_unusable_password() 
+        user.save()
+lokales_passwort_loeschen.short_description = "🔒 Lokales Passwort löschen (Nur LDAP)"
+
 class MyUserAdmin(UserAdmin):
     inlines = (UserProfileInline,)
-    actions = [benutzer_deaktivieren, benutzer_aktivieren]
+    actions = [benutzer_deaktivieren, benutzer_aktivieren, lokales_passwort_loeschen]
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_active_display', 'is_admin_display')
+
+    # --- HIER IST DER NEUE CODE ---
+    def get_inline_instances(self, request, obj=None):
+        if not obj:
+            # Wenn obj 'None' ist, erstellen wir gerade einen neuen Benutzer.
+            # In diesem Fall geben wir eine leere Liste zurück -> das Profil-Feld wird versteckt!
+            return list()
+        # Wenn wir einen bestehenden Benutzer bearbeiten, zeigen wir das Profil-Feld an.
+        return super().get_inline_instances(request, obj)
+    # ------------------------------
 
     def is_active_display(self, obj):
         from django.utils.safestring import mark_safe
@@ -165,5 +180,3 @@ class SchuldenAdmin(admin.ModelAdmin):
     list_display = ('datum', 'schuldner', 'glaeubiger', 'betrag', 'erledigt')
     list_filter = ('erledigt', 'datum', 'glaeubiger')
     search_fields = ('schuldner__username', 'glaeubiger__username')
-    
-

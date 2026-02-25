@@ -1,20 +1,24 @@
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth import get_user_model
 
-class EmailBackend(ModelBackend):
+class SuperuserOnlyBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         UserModel = get_user_model()
+        
         try:
-            # Hier ist der Trick: Wir suchen in der Spalte 'email' 
-            # nach dem Wert, der im Login-Feld 'username' eingegeben wurde.
             user = UserModel.objects.get(email__iexact=username)
         except UserModel.DoesNotExist:
-            # Keine E-Mail gefunden? Dann lassen wir Django weitermachen.
-            return None
-        except UserModel.MultipleObjectsReturned:
-            # Falls (aus Versehen) zwei Leute die gleiche E-Mail haben, abbrechen.
-            return None
-        else:
-            if user.check_password(password) and self.user_can_authenticate(user):
-                return user
+            try:
+                user = UserModel.objects.get(username__iexact=username)
+            except UserModel.DoesNotExist:
+                return None
+
+        # --- DER ENTSCHEIDENDE FIX ---
+        # Statt "if user.is_superuser" prüfen wir jetzt exakt auf deinen Root-Namen!
+        # (Falls dein Root-User "root@user.ch" oder "admin" heißt, passe den Namen hier an)
+        if user.username == 'root@user.ch' and user.check_password(password):
+            return user
+            
+        # Alle anderen (auch andere Superuser!) werden eiskalt abgewiesen
+        # und MÜSSEN zwingend über das LDAP-Backend gehen.
         return None

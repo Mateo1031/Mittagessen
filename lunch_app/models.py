@@ -265,20 +265,33 @@ class UserProfile(models.Model):
     def __str__(self):
         return f'{self.user.username} Profile'
 
-# 2. Automatische Erstellung (Signals)
-# Das sorgt dafür, dass wenn ein neuer User erstellt wird, 
-# automatisch auch ein leeres UserProfile angelegt wird.
+# WICHTIG: Falls du 'Standort' ganz oben in der models.py noch nicht importiert hast,
+# musst du sicherstellen, dass die Klasse Standort über diesen Funktionen definiert ist!
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        UserProfile.objects.create(user=instance)
+        # 1. Wir suchen den gewünschten Standard-Standort (z.B. "Altendorf")
+        standard = Standort.objects.filter(name="Altendorf").first()
+        
+        # Fallback: Falls "Altendorf" nicht existiert, nimm einfach den allerersten
+        if not standard:
+            standard = Standort.objects.first()
+            
+        # 2. Profil direkt MIT dem gefundenen Standort erstellen
+        UserProfile.objects.create(user=instance, standard_standort=standard)
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
-    # Falls es für alte User noch kein Profil gibt, erstellen wir es hier sicherheitshalber
-    UserProfile.objects.get_or_create(user=instance)
-    instance.profile.save()
+    # get_or_create gibt zwei Dinge zurück: Das Profil und ob es gerade neu erstellt wurde
+    profile, wurde_erstellt = UserProfile.objects.get_or_create(user=instance)
     
+    # Falls das Profil für einen ALTEN User hier als Notlösung gerade neu erstellt wurde:
+    if wurde_erstellt:
+        standard = Standort.objects.filter(name="Altendorf").first() or Standort.objects.first()
+        profile.standard_standort = standard
+        
+    profile.save()
 # ... deine anderen Imports ...
 
 class Schulden(models.Model):

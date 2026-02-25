@@ -11,6 +11,13 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
 from pathlib import Path
+import ldap
+from django_auth_ldap.config import LDAPSearch
+
+# --- SSL-Zertifikatsprüfung für den Test ausschalten ---
+ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+
+print("--- SETTINGS GELADEN ---")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -198,6 +205,62 @@ JAZZMIN_SETTINGS = {
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 AUTHENTICATION_BACKENDS = [
-    'lunch_app.backends.EmailBackend',  # Unser neuer E-Mail-Check (Zuerst!)
-    'django.contrib.auth.backends.ModelBackend',  # Fallback (Sicherheitshalber)
+    'django_auth_ldap.backend.LDAPBackend',
+    'lunch_app.backends.SuperuserOnlyBackend',
 ]
+
+
+AUTH_LDAP_SERVER_URI = "ldaps://10.133.32.10:636"
+
+# WICHTIG: Hier muss ein echtes USER-Konto stehen (CN=...), keine OU!
+AUTH_LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN')
+AUTH_LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD')
+
+AUTH_LDAP_USER_SEARCH = LDAPSearch(
+    "OU=users,OU=adeon,DC=adeon,DC=local",
+    ldap.SCOPE_SUBTREE,
+    "(mail=%(user)s)" 
+)
+
+# Wichtig: Sagt LDAP, dass das Feld 'mail' zur Identifikation genutzt wird
+#AUTH_LDAP_USER_QUERY_FIELD = 'email'
+
+# 5. Daten-Mapping (Damit Name und E-Mail in Django übernommen werden)
+AUTH_LDAP_USER_ATTR_MAP = {
+    "first_name": "givenName",
+    "last_name": "sn",
+    "email": "mail",
+}
+
+# 6. (Optional) User immer updaten, wenn sie sich einloggen
+AUTH_LDAP_ALWAYS_UPDATE_USER = True
+
+import logging
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django_auth_ldap': {
+            'handlers': ['console'],
+            'level': 'DEBUG', # Zeigt jeden Suchschritt
+            'propagate': True,
+        },
+    },
+}
+
+# Zwingt LDAP dazu, den Benutzernamen IMMER kleingeschrieben zu verarbeiten
+AUTH_LDAP_GLOBAL_OPTIONS = {
+    ldap.OPT_X_TLS_REQUIRE_CERT: ldap.OPT_X_TLS_NEVER,
+}
+# Die wichtigste Zeile für dein Problem:
+AUTH_LDAP_CLEAN_USERNAMES = True

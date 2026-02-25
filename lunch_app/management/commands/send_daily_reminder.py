@@ -114,11 +114,11 @@ class Command(BaseCommand):
 
         subject = "🍽️ Hunger? Zeit für Mittagessen!"
         message = (
-            f"Hallo {user.username},\n\n"
+            f"Hallo {user.first_name or user.username},\n\n"
             f"Es ist 10:00 Uhr und du hast noch nichts für heute bestellt.\n"
             f"Schnell, bevor die Deadline abläuft!\n\n"
             f"Hier geht's zur Auswahl:\n"
-            f"http://mittagessen.adeon.ch\n\n"
+            f"https://mittagessen.adeon.ch\n\n"
             f"(Du kannst diese Erinnerung in deinem Profil deaktivieren.)"
         )
 

@@ -61,8 +61,20 @@ def register(request):
 @login_required
 def welcome(request):
     heute = timezone.now().date()
+    
+    # 1. Prüfen auf Bestellung (Delivery/Takeaway)
     existing_order = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).first()
-    existing_order_art = existing_order.art if existing_order else None
+    
+    # 2. Prüfen auf Lokal-Stimme
+    user_vote = Stimme.objects.filter(benutzer=request.user, datum=heute, art='LOKAL').first()
+
+    # Logik: Priorität hat die Bestellung, sonst die Lokal-Stimme
+    if existing_order:
+        existing_order_art = existing_order.art
+    elif user_vote:
+        existing_order_art = 'LOKAL'
+    else:
+        existing_order_art = None
     
     # NEU: Prüfen, ob der User heute im Urlaub/Abwesend ist
     ist_abwesend = False
@@ -80,24 +92,32 @@ def welcome(request):
 
 @login_required
 def restaurant_liste(request, art):
+    heute = timezone.now().date()
+    
+    # --- NEUER RIEGEL: Prüfen, ob der User bereits in einer ANDEREN Kategorie feststeckt ---
+    order = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).first()
+    vote = Stimme.objects.filter(benutzer=request.user, datum=heute, art='LOKAL').first()
+    
+    aktive_art = order.art if order else ('LOKAL' if vote else None)
+    
+    # Wenn der User schon eine Wahl getroffen hat und diese NICHT zur aktuellen 'art' passt
+    if aktive_art and aktive_art != art:
+        messages.warning(request, f"⚠️ Du bist bereits für '{aktive_art}' angemeldet. Bitte ändere deine Wahl dort.")
+        return redirect('welcome')
+    # -------------------------------------------------------------------------------------
 
     aktiver_standort_id = request.session.get('aktiver_standort_id')
     
-    # 2. Wenn noch nichts in der Session ist, nehmen wir den Standard-Standort des Users
     if not aktiver_standort_id and hasattr(request.user, 'profile') and request.user.profile.standard_standort:
         aktiver_standort_id = request.user.profile.standard_standort.id
         request.session['aktiver_standort_id'] = aktiver_standort_id
 
-    # 3. RESTAURANTS FILTERN (Hier passiert die Magie!)
     if aktiver_standort_id:
-        # Nur Restaurants laden, die genau diese Standort-ID haben
         restaurants = Restaurant.objects.filter(standort_id=aktiver_standort_id)
     else:
-        # Fallback: Falls gar kein Standort gesetzt ist, zeige alle
         restaurants = Restaurant.objects.all()
 
     aufraemen_alter_daten()
-    heute = timezone.now().date()
     request.session['gewaehlte_art'] = art
     
     base_query = restaurants.annotate(
@@ -117,23 +137,22 @@ def restaurant_liste(request, art):
         gefilterte_restaurants = base_query
         titel = "Alle Restaurants"
 
-    # === HIER KOMMT DER NEUE SUCH-BLOCK HIN ===
     suchbegriff = request.GET.get('q')
     if suchbegriff:
-        # Achtung: Die Variable heißt hier 'gefilterte_restaurants'
         gefilterte_restaurants = gefilterte_restaurants.filter(
             Q(name__icontains=suchbegriff) | 
             Q(beschreibung__icontains=suchbegriff) | 
             Q(gerichte__name__icontains=suchbegriff)
         ).distinct()
-    # === ENDE SUCH-BLOCK ===
 
     top_restaurants = gefilterte_restaurants.filter(stimmen_anzahl__gt=0).order_by('-stimmen_anzahl')[:3]
-    user_vote = Stimme.objects.filter(benutzer=request.user, datum=heute, art=art).first()
-    user_vote_id = user_vote.restaurant.id if user_vote else None
+    
+    # Wir brauchen user_vote für die Anzeige in der Liste
+    current_vote = Stimme.objects.filter(benutzer=request.user, datum=heute, art=art).first()
+    user_vote_id = current_vote.restaurant.id if current_vote else None
 
-    existing_order = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).first()
-    existing_order_art = existing_order.art if existing_order else None
+    # Für den Context: existing_order_art muss auch hier konsistent sein
+    final_existing_art = order.art if order else ('LOKAL' if vote else None)
     
     context = {
         'restaurants': gefilterte_restaurants.order_by('name'),
@@ -141,9 +160,9 @@ def restaurant_liste(request, art):
         'user_vote_id': user_vote_id, 
         'page_title': titel,
         'current_art': art,
-        'existing_order_art': existing_order_art, 
-        'existing_order_restaurant_id': existing_order.gericht.restaurant.id if existing_order else None,
-        'existing_order_restaurant_name': existing_order.gericht.restaurant.name if existing_order else None,
+        'existing_order_art': final_existing_art, # Hier die kombinierte Art nutzen
+        'existing_order_restaurant_id': order.gericht.restaurant.id if order else (vote.restaurant.id if vote else None),
+        'existing_order_restaurant_name': order.gericht.restaurant.name if order else (vote.restaurant.name if vote else None),
     }
     return render(request, 'lunch_app/index.html', context)
 
@@ -154,6 +173,29 @@ def restaurant_menu(request, restaurant_id):
     vorauswahl_art = request.session.get('gewaehlte_art', 'LOKAL')
     existing_order = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).first()
     existing_order_art = existing_order.art if existing_order else None
+
+    # --- NEUER DOPPEL-CHECK ---
+    
+    # 1. Check: Gibt es eine Bestellung bei einem ANDEREN Restaurant?
+    fremde_bestellung = Bestellung.objects.filter(
+        benutzer=request.user, 
+        datum__date=heute
+    ).exclude(gericht__restaurant=restaurant).first()
+
+    # 2. Check: Gibt es eine Lokal-Anmeldung (Stimme) bei einem ANDEREN Restaurant?
+    fremde_stimme = Stimme.objects.filter(
+        benutzer=request.user, 
+        datum=heute
+    ).exclude(restaurant=restaurant).first()
+
+    # Wenn eines von beiden zutrifft: Alarm!
+    if fremde_bestellung or fremde_stimme:
+        res_name = fremde_bestellung.gericht.restaurant.name if fremde_bestellung else fremde_stimme.restaurant.name
+        clear_messages(request)
+        messages.error(request, f"⚠️ Du bist bereits bei '{res_name}' angemeldet. Du musst dich dort erst abmelden, bevor du woanders wählen kannst.")
+        return redirect('uebersicht')
+
+    # --- ENDE DOPPEL-CHECK ---
 
     fremde = Bestellung.objects.filter(benutzer=request.user, datum__date=heute).exclude(gericht__restaurant=restaurant).select_related('gericht__restaurant').first()
     if fremde:
@@ -169,11 +211,11 @@ def restaurant_menu(request, restaurant_id):
     alte_art = eigene_bestellungen.first().art if eigene_bestellungen.exists() else vorauswahl_art
     total_others = Bestellung.objects.filter(datum__date=heute, gericht__restaurant=restaurant).exclude(benutzer=request.user).aggregate(Sum('gericht__preis'))['gericht__preis__sum'] or 0
 
-    andere_bestellungen = Bestellung.objects.filter(datum__date=heute, gericht__restaurant=restaurant).exclude(benutzer=request.user).select_related('benutzer')
-    social_proof = {}
-    for b in andere_bestellungen:
-        if b.gericht_id not in social_proof: social_proof[b.gericht_id] = []
-        if len(social_proof[b.gericht_id]) < 5: social_proof[b.gericht_id].append(b.benutzer.username[:2].upper())
+    #andere_bestellungen = Bestellung.objects.filter(datum__date=heute, gericht__restaurant=restaurant).exclude(benutzer=request.user).select_related('benutzer')
+    #social_proof = {}
+    #for b in andere_bestellungen:
+    #    if b.gericht_id not in social_proof: social_proof[b.gericht_id] = []
+    #    if len(social_proof[b.gericht_id]) < 5: social_proof[b.gericht_id].append(b.benutzer.username[:2].upper())
 
     favoriten_ids = list(Favorit.objects.filter(benutzer=request.user, gericht__restaurant=restaurant).values_list('gericht_id', flat=True))
 
@@ -219,7 +261,7 @@ def restaurant_menu(request, restaurant_id):
         'goal_reached': goal_reached,
         'bereits_bestellt_ids': bereits_bestellt_ids, 
         'alte_art': alte_art,
-        'social_proof': social_proof,
+        #'social_proof': social_proof,
         'favoriten_ids': favoriten_ids,
         'gerichte_liste': gerichte_liste,
         'existing_order_art': existing_order_art,

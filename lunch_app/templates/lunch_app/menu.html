@@ -163,17 +163,19 @@
                                             <span class="badge-config">Anpassen</span>
                                         {% endif %}
                                         
-                                        {% if social_proof %}
-                                            {% for id, users in social_proof.items %}
-                                                {% if id == gericht.id %}
-                                                    <div class="social-badges">
-                                                    {% for user_kuerzel in users %}
-                                                        <span class="avatar-badge" title="Jemand hat das bestellt!">{{ user_kuerzel }}</span>
-                                                    {% endfor %}
-                                                    </div>
-                                                {% endif %}
-                                            {% endfor %}
-                                        {% endif %}
+                                        {% comment %} 
+                                            {% if social_proof %}
+                                                {% for id, users in social_proof.items %}
+                                                    {% if id == gericht.id %}
+                                                        <div class="social-badges">
+                                                        {% for user_kuerzel in users %}
+                                                            <span class="avatar-badge" title="Jemand hat das bestellt!">{{ user_kuerzel }}</span>
+                                                        {% endfor %}
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                        {% endcomment %}
 
                                         {% if has_opts > 0 %}
                                         <div id="options-data-{{ gericht.id }}" style="display:none;">
