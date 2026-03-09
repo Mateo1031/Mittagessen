@@ -33,7 +33,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-key-nur-fuer-lokal')
 DEBUG = os.environ.get('DEBUG') == 'True'
 
 # WICHTIG: Wenn DEBUG = False ist, MUSST du Hosts erlauben
-ALLOWED_HOSTS = ['mittagessen.adeon.ch', 'localhost', '127.0.0.1'] 
+ALLOWED_HOSTS = ['*'] 
 # (Trag hier die IP deiner VM oder deine Domain ein)
 
 CSRF_TRUSTED_ORIGINS = [

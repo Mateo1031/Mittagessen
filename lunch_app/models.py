@@ -9,6 +9,10 @@ import datetime
 class Standort(models.Model):
     name = models.CharField(max_length=100)
     
+    class Meta:
+        verbose_name = 'Standort'
+        verbose_name_plural = 'Standorte'
+
     def __str__(self):
         return self.name
 
@@ -127,6 +131,10 @@ class Restaurant(models.Model):
         verbose_name="Liefergebühren (CHF)"
     )
 
+    class Meta:
+        verbose_name = 'Restaurant'
+        verbose_name_plural = 'Restaurants'
+
     def __str__(self):
         return self.name
 
@@ -136,6 +144,10 @@ class Gericht(models.Model):
     preis = models.DecimalField(max_digits=6, decimal_places=2)
     kategorie = models.CharField(max_length=100, default="Hauptspeise")
     reihenfolge = models.IntegerField(default=100) 
+
+    class Meta:
+        verbose_name = 'Gericht'
+        verbose_name_plural = 'Gerichte'
 
     def __str__(self):
         return f"{self.name} ({self.restaurant.name})"
@@ -158,6 +170,8 @@ class OptionGroup(models.Model):
 
     class Meta:
         ordering = ['reihenfolge']
+        verbose_name = 'Option Group'
+        verbose_name_plural = 'Option Groups'
 
 class OptionItem(models.Model):
     group = models.ForeignKey(OptionGroup, on_delete=models.CASCADE, related_name='items')
@@ -198,8 +212,13 @@ class Bestellung(models.Model):
     ]
     art = models.CharField(max_length=20, choices=ART_CHOICES, default='TAKEAWAY')
 
+    class Meta:
+        verbose_name = 'Bestellung'
+        verbose_name_plural = 'Bestellungen'
+
     def __str__(self):
         return f"{self.benutzer.username} - {self.gericht.name}"
+
 
 class Stimme(models.Model):
     benutzer = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -216,6 +235,8 @@ class Stimme(models.Model):
 
     class Meta:
         unique_together = ('benutzer', 'datum')
+        verbose_name = 'Stimme'
+        verbose_name_plural = 'Stimmen'
 
     def __str__(self):
         return f"{self.benutzer.username} -> {self.restaurant.name} ({self.art})"
@@ -224,7 +245,10 @@ class Favorit(models.Model):
     benutzer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favoriten')
     gericht = models.ForeignKey(Gericht, on_delete=models.CASCADE, related_name='favorisiert_von')
     erstellt_am = models.DateTimeField(auto_now_add=True)
-    class Meta: unique_together = ('benutzer', 'gericht')
+    class Meta:
+        unique_together = ('benutzer', 'gericht')
+        verbose_name = 'Favorit'
+        verbose_name_plural = 'Favoriten'
     
 class TagesVerantwortlicher(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True)
@@ -310,6 +334,10 @@ class Schulden(models.Model):
         choices=ZAHLUNGSART_CHOICES, 
         default='SONST'
     )
+
+    class Meta:
+        verbose_name = 'Schuld'
+        verbose_name_plural = 'Schulden'
 
     def __str__(self):
         return f"{self.schuldner} schuldet {self.glaeubiger} {self.betrag}"
